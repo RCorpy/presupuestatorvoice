@@ -1,0 +1,18 @@
+BASE_GRAMMAR = [
+    "fila",
+    "cantidad",
+    "precio",
+    "siguiente",
+    "cancelar",
+    "producto",
+    "uno", "dos", "tres", "cuatro", "cinco"
+]
+
+def build_grammar(materials: dict) -> list[str]:
+    grammar = set(BASE_GRAMMAR)
+    print(materials)
+    for name in materials.keys():
+        grammar.add(name.lower())
+    print("printing grammar")
+    
+    return sorted(grammar)
