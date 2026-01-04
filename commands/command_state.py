@@ -1,7 +1,7 @@
 # commands/command_state.py
 
 class CommandState:
-    MAIN_COMMANDS = ["FILA", "PRODUCTO", "CANTIDAD", "PRECIO", "CANCELAR"]
+    MAIN_COMMANDS = ["FILA", "PRODUCTO", "CANTIDAD", "PRECIO", "CANCELAR", "SIGUIENTE"]
 
     WORD_TO_INT = {
         "UNO": 1, "DOS": 2, "TRES": 3, "CUATRO": 4, "CINCO": 5
@@ -12,10 +12,16 @@ class CommandState:
         self.current_command = None
         self.last_value = None
         self.active_row = 0  # fila activa
+        self.product_buffer = []             # ["KIT", "EPOXI", ...]
+        self.product_matches = []            # candidatos actuales
+        self.in_product_mode = False
 
     def reset(self):
         self.current_command = None
         self.last_value = None
+        self.in_product_mode = False
+        self.product_buffer.clear()
+        self.product_matches.clear()
 
     def handle_word(self, word, model):
         word = word.upper()
@@ -23,33 +29,56 @@ class CommandState:
 
         print(word)
 
+        # -----------------------
+        # CANCELAR (global)
+        # -----------------------
         if word == "CANCELAR":
             self.reset()
             return "Comando cancelado"
 
+        # -----------------------
+        # MODO PRODUCTO
+        # -----------------------
+        if self.in_product_mode:
+            return self._handle_product_word(word, model)
+
+        # -----------------------
+        # SIGUIENTE (normal)
+        # -----------------------
         if word == "SIGUIENTE":
             self.active_row += 1
             if self.active_row >= model.row_count():
                 model.add_row()
             return f"Fila siguiente ({self.active_row + 1})"
 
-        # Comando principal
+        # -----------------------
+        # SIN COMANDO ACTIVO
+        # -----------------------
         if self.current_command is None:
-            # Si no hay comando activo
-            # ¿Es un producto?
+
+            # Producto directo (compatibilidad)
             if word in self.materials:
                 model.set_producto(self.active_row, word)
                 model.set_precio(self.active_row, self.materials[word]["price"])
                 return f"Producto {word} asignado"
 
-            # ¿Es un comando explícito?
-            elif word in ["FILA", "PRODUCTO", "CANTIDAD", "PRECIO"]:
+            # Activar comando
+            if word in ["FILA", "CANTIDAD", "PRECIO"]:
                 self.current_command = word
                 return f"Comando {word} activo, esperando valor"
-            else:
-                return f"Palabra no reconocida en estado principal: {word}"
 
-        # Ejecutar comando activo
+            # Activar modo producto
+            if word == "PRODUCTO":
+                self.in_product_mode = True
+                self.product_buffer.clear()
+                self.product_matches = list(self.materials.keys())
+                return "Modo producto activado"
+
+            return f"Palabra no reconocida: {word}"
+
+        # -----------------------
+        # COMANDOS CON VALOR
+        # -----------------------
         if self.current_command == "FILA":
             if word == "NUEVA":
                 model.add_row()
@@ -72,19 +101,6 @@ class CommandState:
             else:
                 self.reset()
                 return f"Número de fila inválido: {word}"
-
-        elif self.current_command == "PRODUCTO":
-            if word not in self.materials:
-                #self.reset()
-                return f"Producto no existente: {word}"
-
-            price = self.materials[word]["price"]
-            model.set_producto(self.active_row, word)
-            model.set_precio(self.active_row, price)
-
-            self.reset()
-            return f"Producto {word} asignado"
-
 
         elif self.current_command == "CANTIDAD":
             numeric_value = self.WORD_TO_INT.get(word, word)
@@ -110,3 +126,36 @@ class CommandState:
 
         self.reset()
         return f"Error inesperado con palabra: {word}"
+
+
+    def _handle_product_word(self, word, model):
+        # Confirmación
+        if word == "SIGUIENTE":
+            if len(self.product_matches) == 1:
+                product = self.product_matches[0]
+                model.set_producto(self.active_row, product)
+                model.set_precio(self.active_row, self.materials[product]["price"])
+                self.reset()
+                return f"Producto {product} confirmado"
+            else:
+                return f"No se puede confirmar, candidatos: {len(self.product_matches)}"
+
+        # Añadir palabra al buffer
+        
+        self.product_buffer.append(word)
+        print("product buffer: ", self.product_buffer)
+
+        # Filtrar candidatos
+        new_matches = []
+        for product in self.product_matches:
+            if all(token in product for token in self.product_buffer):
+                new_matches.append(product)
+        print("new_matches", new_matches)
+        # Si no queda ninguno, ignoramos la palabra
+        if not new_matches:
+            self.product_buffer.pop()
+            return f"Palabra no válida para producto: {word}"
+
+        self.product_matches = new_matches
+
+        return f"Producto parcial: {' '.join(self.product_buffer)} ({len(self.product_matches)} candidatos)"
