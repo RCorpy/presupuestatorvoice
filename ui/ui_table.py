@@ -1,152 +1,273 @@
+# ui/ui_table.py
+
 from PySide6.QtWidgets import (
     QMainWindow, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget, QLineEdit, QLabel, QPushButton, QFileDialog
+    QVBoxLayout, QHBoxLayout, QWidget,
+    QLineEdit, QLabel, QPushButton, QListWidget
 )
 from PySide6.QtCore import Qt
+
 from voice.voice_listener import VoiceListener
 from voice.voice_normalizer import normalize_command
-from commands.command_state import CommandState
-from excel.excel_exporter import export_proforma_to_excel
-from model import ProformaModel
-from db.materials_repository import load_materials
 from voice.grammar_builder import build_grammar
 
+from commands.command_state import CommandState
+from excel.excel_exporter import export_proforma_to_excel
+from db.materials_repository import load_materials
+
+from models.proforma_model import ProformaModel
+from models.proforma_row import ProformaRow
 
 
 class ProformaTableWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Editor de Proforma")
-        self.resize(700, 400)
-        self.materials = load_materials()
+        self.setWindowTitle("PresupuestatorVoice")
+        self.resize(1100, 550)
 
-        self.model = ProformaModel(rows=5)
+        # --------------------------------------------------
+        # Datos / estado
+        # --------------------------------------------------
+        self.materials = load_materials()
+        self.model = ProformaModel()
         self.state = CommandState(self.materials)
+
         self.active_row = 0
+        self.last_token = None
         self.listening = False
         self.voice_worker = None
-        self.last_token = None
-        
 
+        # --------------------------------------------------
+        # Filas iniciales (ejemplo funcional)
+        # --------------------------------------------------
+        self.model.add_row(ProformaRow(type="TITLE", col_1="2 CAPAS EPOXI VERDE"))
+        self.model.add_row(ProformaRow(
+            type="PRODUCT",
+            col_0="KIT 18 KG",
+            col_1="KIT EPOXI VERDE",
+            col_2="1",
+            col_3="120",
+            col_4="120"
+        ))
+        self.model.add_row(ProformaRow(
+            type="INFO",
+            col_1="CATALIZADOR 5:1",
+            col_2="100% SÓLIDOS"
+        ))
+        self.model.add_row(ProformaRow(type="EMPTY"))
+
+        # --------------------------------------------------
         # Tabla
-        self.table = QTableWidget(self.model.row_count(), 4)
-        self.table.setHorizontalHeaderLabels(["PRODUCTO", "CANTIDAD", "PRECIO", "TOTAL"])
+        # --------------------------------------------------
+        self.table = QTableWidget(self.model.row_count(), 5)
+        self.table.setHorizontalHeaderLabels(
+            ["KITS", "PRODUCTO", "CANTIDAD", "PRECIO", "TOTAL"]
+        )
         self._init_table_items()
         self.table.cellChanged.connect(self.on_cell_changed)
 
-        # Input de comando
+        # --------------------------------------------------
+        # Lista de productos (ProductBuffer)
+        # --------------------------------------------------
+        self.product_list = QListWidget()
+        self.product_list.setMaximumWidth(350)
+        self.product_list.itemClicked.connect(self.on_product_clicked)
+        self.product_list.hide()
+
+        # --------------------------------------------------
+        # Input texto
+        # --------------------------------------------------
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Escribe un comando: FILA 2 CONSULTORIA CANTIDAD 3")
+        self.command_input.setPlaceholderText(
+            "Ej: PRODUCTO KIT EPOXI PRIMER GRIS MEDIO"
+        )
         self.command_input.returnPressed.connect(self.process_command)
 
-        # Botón de voz
+        # --------------------------------------------------
+        # Botones
+        # --------------------------------------------------
         self.listen_button = QPushButton("🎙️ Escuchar")
         self.listen_button.clicked.connect(self.listen_voice)
 
-        #Boton de guardado excel
         self.excel_button = QPushButton("💾 Exportar a Excel")
         self.excel_button.clicked.connect(self.export_excel)
 
+        # --------------------------------------------------
+        # Estado
+        # --------------------------------------------------
+        self.status_label = QLabel("Listo")
 
+        # --------------------------------------------------
+        # Layouts
+        # --------------------------------------------------
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(self.table)
+        left_layout.addWidget(self.status_label)
+        left_layout.addWidget(self.command_input)
+        left_layout.addWidget(self.listen_button)
+        left_layout.addWidget(self.excel_button)
 
-        # Label de estado
-        self.status_label = QLabel(f"Fila activa: {self.active_row + 1}")
-
-        # Layout
-        layout = QVBoxLayout()
-        layout.addWidget(self.table)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.command_input)
-        layout.addWidget(self.listen_button)
-        layout.addWidget(self.excel_button)
+        main_layout = QHBoxLayout()
+        main_layout.addLayout(left_layout)
+        main_layout.addWidget(self.product_list)
 
         container = QWidget()
-        container.setLayout(layout)
+        container.setLayout(main_layout)
         self.setCentralWidget(container)
 
         self.refresh_all_rows()
         self.highlight_active_row()
 
+    # ======================================================
+    # Tabla
+    # ======================================================
+
     def _init_table_items(self):
+        """Inicializa QTableWidgetItem en todas las celdas"""
         for r in range(self.table.rowCount()):
             for c in range(self.table.columnCount()):
-                item = self.table.item(r, c)
-                if item is None:
-                    item = QTableWidgetItem("")
-                    if c == 3:
-                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    self.table.setItem(r, c, item)
+                if self.table.item(r, c) is None:
+                    self.table.setItem(r, c, QTableWidgetItem(""))
 
     def highlight_active_row(self):
         for r in range(self.table.rowCount()):
+            row_type = self.model.get_row(r).type
             for c in range(self.table.columnCount()):
                 item = self.table.item(r, c)
-                if not item:
-                    item = QTableWidgetItem("")
-                    self.table.setItem(r, c, item)
-                item.setBackground(Qt.yellow if r == self.active_row else Qt.white)
+                if item is None:
+                    continue
 
-    def on_cell_changed(self, row, column):
-        if column == 0:
-            self.model.set_producto(row, self.table.item(row, column).text())
-        elif column == 1:
-            try:
-                self.model.set_cantidad(row, int(self.table.item(row, column).text()))
-            except ValueError:
-                pass
-        elif column == 2:
-            try:
-                self.model.set_precio(row, float(self.table.item(row, column).text()))
-            except ValueError:
-                pass
-        self.refresh_row(row)
+                # fila activa
+                if r == self.active_row:
+                    item.setBackground(Qt.yellow)
+                    item.setForeground(Qt.black)
+                else:
+                    # color según tipo
+                    if row_type == "TITLE":
+                        item.setBackground(Qt.blue)
+                        item.setForeground(Qt.white)
+                    elif row_type == "EMPTY":
+                        item.setBackground(Qt.lightGray)
+                        item.setForeground(Qt.black)
+                    else:
+                        item.setBackground(Qt.white)
+                        item.setForeground(Qt.black)
 
-    def refresh_row(self, row):
-        row_data = self.model.data[row]
-        for col, key in enumerate(["producto", "cantidad", "precio", "total"]):
-            item = self.table.item(row, col)
-            if item is None:
-                item = QTableWidgetItem("")
-                if col == 3:
+    def refresh_row(self, row_index):
+        self.table.blockSignals(True)
+        row = self.model.get_row(row_index)
+
+        # asegurar items existen
+        for c in range(self.table.columnCount()):
+            if self.table.item(row_index, c) is None:
+                self.table.setItem(row_index, c, QTableWidgetItem(""))
+
+        # TITLE
+        if row.type == "TITLE":
+            item = self.table.item(row_index, 0)
+            item.setText(row.col_1)
+            item.setBackground(Qt.blue)
+            item.setForeground(Qt.black)
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+        # PRODUCT
+        elif row.type == "PRODUCT":
+            values = [row.col_0, row.col_1, row.col_2, row.col_3, row.col_4]
+            for c, value in enumerate(values):
+                item = self.table.item(row_index, c)
+                if item:
+                    item.setText(value or "")
+
+            # columna TOTAL no editable
+            total_item = self.table.item(row_index, 4)
+            if total_item:
+                total_item.setFlags(total_item.flags() & ~Qt.ItemIsEditable)
+
+        # INFO
+        elif row.type == "INFO":
+            item0 = self.table.item(row_index, 0)
+            item1 = self.table.item(row_index, 1)
+            if item0: item0.setText(row.col_1 or "")
+            if item1: item1.setText(row.col_2 or "")
+            for item in (item0, item1):
+                if item:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                self.table.setItem(row, col, item)
 
-            value = row_data[key]
-            if key == "total":
-                item.setText(f"{value:.2f}" if value != "" else "")
-            else:
-                item.setText(str(value))
+        # EMPTY → marcar gris
+        elif row.type == "EMPTY":
+            for c in range(self.table.columnCount()):
+                item = self.table.item(row_index, c)
+                if item:
+                    item.setText("")
+                    item.setBackground(Qt.lightGray)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+        self.table.blockSignals(False)
 
     def refresh_all_rows(self):
         for r in range(self.model.row_count()):
             self.refresh_row(r)
 
     def sync_table_rows(self):
-        rows_needed = self.model.row_count()
-        if rows_needed > self.table.rowCount():
-            self.table.setRowCount(rows_needed)
-            self._init_table_items()
+        """Añade filas nuevas al QTableWidget si el modelo creció"""
+        current_table_rows = self.table.rowCount()
+        model_rows = self.model.row_count()
+        if model_rows > current_table_rows:
+            self.table.setRowCount(model_rows)
+            for r in range(current_table_rows, model_rows):
+                for c in range(self.table.columnCount()):
+                    if self.table.item(r, c) is None:
+                        self.table.setItem(r, c, QTableWidgetItem(""))
+
+    def on_cell_changed(self, row, column):
+        """Actualiza los datos del modelo cuando el usuario edita la celda"""
+        proforma_row = self.model.get_row(row)
+        if proforma_row.type != "PRODUCT":
+            return
+
+        text = self.table.item(row, column).text() or ""
+
+        if column == 0:
+            # Columna 0 → KITS
+            proforma_row.col_0 = text
+        elif column == 1:
+            # Columna 1 → Nombre producto
+            self.model.set_product(row, text)
+            # Auto-asignar precio unitario si existe
+            price = self.model.get_price_from_db(text)
+            if price is not None:
+                self.model.set_price(row, price)
+        elif column == 2:
+            # Columna 2 → Cantidad
+            self.model.set_quantity(row, text)
+        elif column == 3:
+            # Columna 3 → Precio unitario
+            self.model.set_price(row, text)
+
+        # Total siempre se recalcula en set_quantity o set_price
+        self.refresh_row(row)
+
+
+    # ======================================================
+    # Comandos (texto / voz)
+    # ======================================================
 
     def process_command(self):
-        command_text = self.command_input.text().upper()
+        text = self.command_input.text().upper()
         self.command_input.clear()
-        self._process_tokens(command_text.split())
+        self._process_tokens(text.split())
 
     def listen_voice(self):
         if not self.listening:
-            self.listen_button.setText("⏹️ Parar")
-            self.status_label.setText("🎙️ Micrófono activado")
             self.listening = True
-            
+            self.listen_button.setText("⏹️ Parar")
             grammar = build_grammar(self.materials)
             self.voice_worker = VoiceListener(grammar=grammar)
-            
             self.voice_worker.result_ready.connect(self.on_voice_result)
             self.voice_worker.start()
         else:
-            self.listen_button.setText("🎙️ Escuchar")
-            self.status_label.setText("🎙️ Micrófono desactivado")
             self.listening = False
+            self.listen_button.setText("🎙️ Escuchar")
             if self.voice_worker:
                 self.voice_worker.stop()
                 self.voice_worker = None
@@ -155,26 +276,49 @@ class ProformaTableWindow(QMainWindow):
         normalized = normalize_command(text)
         self._process_tokens(normalized.split())
 
-    
-
     def _process_tokens(self, tokens):
-        print(tokens)
-
         repeat_allowed = ["SIGUIENTE", "NUEVA"]
 
         for token in tokens:
             if token == self.last_token and token not in repeat_allowed:
                 continue
             self.last_token = token
-
             msg = self.state.handle_word(token, self.model)
-            self.active_row = self.state.active_row  # sincroniza fila activa
+            self.active_row = self.state.active_row
             self.status_label.setText(msg)
 
-            # Sincronizar UI
             self.sync_table_rows()
             self.refresh_row(self.active_row)
             self.highlight_active_row()
+            self.update_product_suggestions()
+
+    # ======================================================
+    # ProductBuffer UI
+    # ======================================================
+
+    def update_product_suggestions(self):
+        self.product_list.clear()
+        if not self.state.in_product_mode:
+            self.product_list.hide()
+            return
+        self.product_list.show()
+        for product in self.state.product_matches[:50]:
+            self.product_list.addItem(product)
+
+    def on_product_clicked(self, item):
+        product = item.text()
+        self.model.set_product(self.state.active_row, product)
+        price = self.model.get_price_from_db(product)
+        if price is not None:
+            self.model.set_price(self.state.active_row, price)
+
+        self.state.reset()
+        self.product_list.clear()
+        self.refresh_row(self.state.active_row)
+
+    # ======================================================
+    # Excel
+    # ======================================================
 
     def export_excel(self):
         try:
@@ -182,4 +326,3 @@ class ProformaTableWindow(QMainWindow):
             self.status_label.setText(f"Excel creado: {path}")
         except Exception as e:
             self.status_label.setText(f"Error exportando Excel: {e}")
-

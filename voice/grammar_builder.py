@@ -5,7 +5,7 @@ BASE_GRAMMAR = [
     "siguiente",
     "cancelar",
     "producto",
-    "uno", "dos", "tres", "cuatro", "cinco"
+    "cero","uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 ]
 
 def build_grammar(materials: dict) -> list[str]:

@@ -1,8 +1,12 @@
-# excel/excel_exporter.py
+#excel.excel_exporter
+
 import openpyxl
+from openpyxl.styles import PatternFill, Font
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+import subprocess
+import platform
 
 load_dotenv()
 
@@ -25,13 +29,60 @@ def export_proforma_to_excel(model):
     wb = openpyxl.load_workbook(BASE_EXCEL)
     ws = wb.active
 
-    start_row = 2  # encabezados en fila 1
+    start_row = 19  # fila inicial B19
+    start_col = 2   # columna B
 
-    for i, row in enumerate(model.data, start=start_row):
-        ws.cell(row=i, column=1, value=row.get("producto"))
-        ws.cell(row=i, column=2, value=row.get("cantidad"))
-        ws.cell(row=i, column=3, value=row.get("precio"))
-        ws.cell(row=i, column=4, value=row.get("total"))
+    current_row = start_row
+
+    # estilos
+    default_font = Font(name="Calibri", size=12, bold=True)
+    title_fill = PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid")
+    title_font = Font(name="Calibri", size=12, color="FFFFFF", bold=True)
+
+    for row in model.rows:
+        if row.type == "PRODUCT":
+            cells = [
+                (row.col_1, start_col),       # nombre producto
+                (row.col_2, start_col + 1),   # cantidad
+                (row.col_3, start_col + 2),   # precio unitario
+                (row.col_4, start_col + 3)    # total
+            ]
+            for value, col in cells:
+                cell = ws.cell(row=current_row, column=col, value=value)
+                cell.font = default_font
+            current_row += 1
+
+        elif row.type == "TITLE":
+            cell = ws.cell(row=current_row, column=start_col, value=row.col_1)
+            cell.fill = title_fill
+            cell.font = title_font
+            current_row += 1
+
+        elif row.type == "INFO":
+            cells = [
+                (row.col_1, start_col),       # info col1 en B
+                (row.col_2, start_col + 1)    # info col2 en C
+            ]
+            for value, col in cells:
+                cell = ws.cell(row=current_row, column=col, value=value)
+                cell.font = default_font
+            current_row += 1
+
+        elif row.type == "EMPTY":
+            current_row += 1
 
     wb.save(output_path)
+
+    # abrir el archivo automáticamente
+    try:
+        if platform.system() == "Windows":
+            os.startfile(output_path)
+        elif platform.system() == "Darwin":
+            subprocess.call(["open", output_path])
+        else:  # Linux
+            subprocess.call(["xdg-open", output_path])
+    except Exception as e:
+        print(f"No se pudo abrir automáticamente el archivo: {e}")
+
     return output_path
+

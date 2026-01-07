@@ -1,4 +1,42 @@
 # commands/command_state.py
+import re
+import os
+from models.proforma_row import ProformaRow
+
+
+def normalize_product_tokens(name: str) -> list[str]:
+    """
+    Convierte:
+    'EPOXI RAL 7043 K-1'
+    en:
+    ['EPOXI', 'RAL', '7', '0', '4', '3', 'K', '1']
+    """
+    name = name.upper()
+
+    tokens = []
+    for part in re.findall(r"[A-Z]+|\d+", name):
+        if part.isdigit():
+            tokens.extend(list(part))  # 7043 → 7,0,4,3
+        else:
+            tokens.append(part)
+
+    return tokens
+
+def normalize_spoken_number(word: str) -> str:
+    WORD_TO_DIGIT = {
+        "CERO": "0",
+        "UNO": "1",
+        "DOS": "2",
+        "TRES": "3",
+        "CUATRO": "4",
+        "CINCO": "5",
+        "SEIS": "6",
+        "SIETE": "7",
+        "OCHO": "8",
+        "NUEVE": "9",
+    }
+    return WORD_TO_DIGIT.get(word, word)
+
 
 class CommandState:
     MAIN_COMMANDS = ["FILA", "PRODUCTO", "CANTIDAD", "PRECIO", "CANCELAR", "SIGUIENTE"]
@@ -15,6 +53,14 @@ class CommandState:
         self.product_buffer = []             # ["KIT", "EPOXI", ...]
         self.product_matches = []            # candidatos actuales
         self.in_product_mode = False
+        self.material_tokens = {
+            name: normalize_product_tokens(name)
+            for name in self.materials.keys()
+        }
+        self.product_triggers = os.getenv(
+            "PRODUCT_TRIGGER_WORDS", ""
+        ).split(",")
+
 
     def reset(self):
         self.current_command = None
@@ -25,6 +71,26 @@ class CommandState:
 
     def handle_word(self, word, model):
         word = word.upper()
+
+        if (
+            self.current_command is None
+            and not self.in_product_mode
+            and word in self.product_triggers
+        ):
+            self.in_product_mode = True
+            self.product_buffer = [word]
+            self.product_matches = [
+                p for p in self.materials
+                if word in self.material_tokens[p]
+            ]
+            return f"Modo producto: {word} ({len(self.product_matches)} candidatos)"
+
+        word = normalize_spoken_number(word)
+        if word.isdigit():
+            token = word
+        else:
+            token = word
+
         max_rows = model.row_count()
 
         print(word)
@@ -48,8 +114,20 @@ class CommandState:
         if word == "SIGUIENTE":
             self.active_row += 1
             if self.active_row >= model.row_count():
-                model.add_row()
+                # Crear nueva fila PRODUCT vacía
+                model.add_row(ProformaRow(
+                    type="PRODUCT",
+                    col_0="",
+                    col_1="",
+                    col_2="",
+                    col_3="",
+                    col_4=""
+                ))
+                # Limpiar buffers de producto para que no se copie nada
+                self.product_buffer.clear()
+                self.product_matches.clear()
             return f"Fila siguiente ({self.active_row + 1})"
+
 
         # -----------------------
         # SIN COMANDO ACTIVO
@@ -58,8 +136,8 @@ class CommandState:
 
             # Producto directo (compatibilidad)
             if word in self.materials:
-                model.set_producto(self.active_row, word)
-                model.set_precio(self.active_row, self.materials[word]["price"])
+                model.set_product(self.active_row, word)
+                model.set_price(self.active_row, self.materials[word]["price"])
                 return f"Producto {word} asignado"
 
             # Activar comando
@@ -70,9 +148,10 @@ class CommandState:
             # Activar modo producto
             if word == "PRODUCTO":
                 self.in_product_mode = True
-                self.product_buffer.clear()
+                self.product_buffer.clear()  # <-- vacía, no ponemos "EPOXI" ni nada
                 self.product_matches = list(self.materials.keys())
                 return "Modo producto activado"
+
 
             return f"Palabra no reconocida: {word}"
 
@@ -81,11 +160,20 @@ class CommandState:
         # -----------------------
         if self.current_command == "FILA":
             if word == "NUEVA":
-                model.add_row()
+                model.add_row(ProformaRow(
+                    type="PRODUCT",
+                    col_0="",
+                    col_1="",
+                    col_2="",
+                    col_3="",
+                    col_4=""
+                ))
                 self.active_row = model.row_count() - 1
+                # Limpiar buffers para que no se arrastre producto previo
+                self.product_buffer.clear()
+                self.product_matches.clear()
                 self.reset()
                 return f"Fila nueva creada: {self.active_row + 1}"
-
             row_number = self.WORD_TO_INT.get(word)
             if row_number is None:
                 try:
@@ -106,7 +194,7 @@ class CommandState:
             numeric_value = self.WORD_TO_INT.get(word, word)
             try:
                 numeric_value = int(numeric_value)
-                model.set_cantidad(self.active_row, numeric_value)
+                model.set_quantity(self.active_row, numeric_value)
                 self.reset()
                 return f"Cantidad asignada: {numeric_value}"
             except ValueError:
@@ -117,7 +205,7 @@ class CommandState:
             numeric_value = self.WORD_TO_INT.get(word, word)
             try:
                 numeric_value = float(numeric_value)
-                model.set_precio(self.active_row, numeric_value)
+                model.set_price(self.active_row, numeric_value)
                 self.reset()
                 return f"Precio asignado: {numeric_value}"
             except ValueError:
@@ -127,35 +215,50 @@ class CommandState:
         self.reset()
         return f"Error inesperado con palabra: {word}"
 
-
     def _handle_product_word(self, word, model):
-        # Confirmación
+        word = word.upper()
+
+        # -----------------------
+        # CONFIRMAR PRODUCTO
+        # -----------------------
         if word == "SIGUIENTE":
             if len(self.product_matches) == 1:
                 product = self.product_matches[0]
-                model.set_producto(self.active_row, product)
-                model.set_precio(self.active_row, self.materials[product]["price"])
+                model.set_product(self.active_row, product)
+                model.set_price(self.active_row, self.materials[product]["price"])
                 self.reset()
                 return f"Producto {product} confirmado"
             else:
                 return f"No se puede confirmar, candidatos: {len(self.product_matches)}"
 
-        # Añadir palabra al buffer
-        
+        # -----------------------
+        # AÑADIR TOKEN AL BUFFER
+        # -----------------------
         self.product_buffer.append(word)
-        print("product buffer: ", self.product_buffer)
 
-        # Filtrar candidatos
         new_matches = []
+
         for product in self.product_matches:
-            if all(token in product for token in self.product_buffer):
+            product_tokens = self.material_tokens[product]
+
+            # TODOS los tokens del buffer deben existir en el producto
+            if all(token in product_tokens for token in self.product_buffer):
                 new_matches.append(product)
-        print("new_matches", new_matches)
-        # Si no queda ninguno, ignoramos la palabra
+
+        # -----------------------
+        # SI NO HAY MATCH → ROLLBACK
+        # -----------------------
         if not new_matches:
             self.product_buffer.pop()
             return f"Palabra no válida para producto: {word}"
 
+        # -----------------------
+        # ACTUALIZAR MATCHES
+        # -----------------------
         self.product_matches = new_matches
 
-        return f"Producto parcial: {' '.join(self.product_buffer)} ({len(self.product_matches)} candidatos)"
+        return (
+            f"Producto parcial: {' '.join(self.product_buffer)} "
+            f"({len(self.product_matches)} candidatos)"
+        )
+
