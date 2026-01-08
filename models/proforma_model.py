@@ -2,6 +2,10 @@
 from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 
+PRODUCT_INFO_RULES = {
+    "EPOXI": "Catalizador 5:1",
+    "POLIURETANO": "Catalizador 4:1",
+}
 
 class ProformaModel:
     def __init__(self):
@@ -36,12 +40,27 @@ class ProformaModel:
         row = self.rows[row_index]
         if row.type != "PRODUCT":
             return
+
         row.col_1 = product_name
 
+        # Precio unitario
         price = self.get_price_from_db(product_name)
         if price is not None:
-            row.col_3 = str(price)  # PRECIO UNITARIO
+            row.col_3 = str(price)
             self._recalculate(row)
+
+        # ----------------------
+        # Agregar INFO si aplica
+        # ----------------------
+        info_text = self._infer_info_from_product(product_name)
+        if info_text:
+            # Solo insertamos si la siguiente fila no es INFO ya
+            if row_index + 1 >= len(self.rows) or self.rows[row_index + 1].type != "INFO":
+                self.insert_row(
+                    row_index + 1,
+                    ProformaRow(type="INFO", col_1=info_text)
+                )
+
 
     def set_quantity(self, row_index: int, quantity):
         row = self.rows[row_index]
@@ -74,3 +93,9 @@ class ProformaModel:
         if not material:
             return None
         return material.get("price")
+
+    def _infer_info_from_product(self, product_name):
+        for key, text in PRODUCT_INFO_RULES.items():
+            if key in product_name:
+                return text
+        return None

@@ -5,6 +5,10 @@ BASE_GRAMMAR = [
     "siguiente",
     "cancelar",
     "producto",
+    "nuevo",
+    "nueva",
+    "titulo",
+    "detalle", 
     "cero","uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 ]
 

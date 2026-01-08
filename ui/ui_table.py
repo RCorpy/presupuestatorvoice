@@ -57,6 +57,32 @@ class ProformaTableWindow(QMainWindow):
         self.model.add_row(ProformaRow(type="EMPTY"))
 
         # --------------------------------------------------
+        # Barra lateral izquierda
+        # --------------------------------------------------
+        self.sidebar = QWidget()
+        self.sidebar.setMaximumWidth(140)
+
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setAlignment(Qt.AlignTop)
+
+        # Botones de acciones sobre la tabla
+        self.add_product_btn = QPushButton("➕ Producto")
+        self.add_product_btn.clicked.connect(self.add_product_row)
+        sidebar_layout.addWidget(self.add_product_btn)
+
+        # Espacio flexible
+        sidebar_layout.addStretch()
+
+        # Botones globales
+        self.listen_button = QPushButton("🎙️ Escuchar")
+        self.listen_button.clicked.connect(self.listen_voice)
+        sidebar_layout.addWidget(self.listen_button)
+
+        self.excel_button = QPushButton("💾 Exportar Excel")
+        self.excel_button.clicked.connect(self.export_excel)
+        sidebar_layout.addWidget(self.excel_button)
+
+        # --------------------------------------------------
         # Tabla
         # --------------------------------------------------
         self.table = QTableWidget(self.model.row_count(), 5)
@@ -65,6 +91,7 @@ class ProformaTableWindow(QMainWindow):
         )
         self._init_table_items()
         self.table.cellChanged.connect(self.on_cell_changed)
+        self.table.cellClicked.connect(self.on_cell_clicked)
 
         # --------------------------------------------------
         # Lista de productos (ProductBuffer)
@@ -75,7 +102,7 @@ class ProformaTableWindow(QMainWindow):
         self.product_list.hide()
 
         # --------------------------------------------------
-        # Input texto
+        # Input de comandos
         # --------------------------------------------------
         self.command_input = QLineEdit()
         self.command_input.setPlaceholderText(
@@ -84,39 +111,33 @@ class ProformaTableWindow(QMainWindow):
         self.command_input.returnPressed.connect(self.process_command)
 
         # --------------------------------------------------
-        # Botones
-        # --------------------------------------------------
-        self.listen_button = QPushButton("🎙️ Escuchar")
-        self.listen_button.clicked.connect(self.listen_voice)
-
-        self.excel_button = QPushButton("💾 Exportar a Excel")
-        self.excel_button.clicked.connect(self.export_excel)
-
-        # --------------------------------------------------
         # Estado
         # --------------------------------------------------
         self.status_label = QLabel("Listo")
 
         # --------------------------------------------------
-        # Layouts
+        # Layout principal
         # --------------------------------------------------
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(self.table)
-        left_layout.addWidget(self.status_label)
-        left_layout.addWidget(self.command_input)
-        left_layout.addWidget(self.listen_button)
-        left_layout.addWidget(self.excel_button)
+        table_layout = QVBoxLayout()
+        table_layout.addWidget(self.table)
+        table_layout.addWidget(self.status_label)
+        table_layout.addWidget(self.command_input)
 
         main_layout = QHBoxLayout()
-        main_layout.addLayout(left_layout)
+        main_layout.addWidget(self.sidebar)
+        main_layout.addLayout(table_layout)
         main_layout.addWidget(self.product_list)
 
         container = QWidget()
         container.setLayout(main_layout)
         self.setCentralWidget(container)
 
+        # --------------------------------------------------
+        # Refresco inicial
+        # --------------------------------------------------
         self.refresh_all_rows()
         self.highlight_active_row()
+
 
     # ======================================================
     # Tabla
@@ -152,6 +173,12 @@ class ProformaTableWindow(QMainWindow):
                     else:
                         item.setBackground(Qt.white)
                         item.setForeground(Qt.black)
+
+    def on_cell_clicked(self, row, column):
+        self.active_row = row
+        self.state.active_row = row
+        self.highlight_active_row()
+        self.update_product_suggestions()
 
     def refresh_row(self, row_index):
         self.table.blockSignals(True)
@@ -193,14 +220,21 @@ class ProformaTableWindow(QMainWindow):
                 if item:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
-        # EMPTY → marcar gris
+        # EMPTY → marcar gris o highlight si activa
         elif row.type == "EMPTY":
             for c in range(self.table.columnCount()):
                 item = self.table.item(row_index, c)
                 if item:
                     item.setText("")
-                    item.setBackground(Qt.lightGray)
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if row_index == self.active_row:
+                        # fila activa → amarillo
+                        item.setBackground(Qt.yellow)
+                        item.setForeground(Qt.black)
+                    else:
+                        # fila normal → gris
+                        item.setBackground(Qt.lightGray)
+                        item.setForeground(Qt.black)
 
         self.table.blockSignals(False)
 
@@ -275,20 +309,32 @@ class ProformaTableWindow(QMainWindow):
     def on_voice_result(self, text):
         normalized = normalize_command(text)
         self._process_tokens(normalized.split())
+        self.refresh_all_rows()
 
     def _process_tokens(self, tokens):
-        repeat_allowed = ["SIGUIENTE", "NUEVA"]
+        repeat_allowed = ["SIGUIENTE", "NUEVA", "PRODUCTO", "KIT", "EPOXI"]
 
         for token in tokens:
             if token == self.last_token and token not in repeat_allowed:
                 continue
             self.last_token = token
+
+            before_rows = self.model.row_count()
+
             msg = self.state.handle_word(token, self.model)
+
+            after_rows = self.model.row_count()
+
             self.active_row = self.state.active_row
             self.status_label.setText(msg)
 
-            self.sync_table_rows()
-            self.refresh_row(self.active_row)
+            # 🔴 CLAVE: si el modelo cambió, refrescar TODO
+            if after_rows != before_rows:
+                self.sync_table_rows()
+                self.refresh_all_rows()
+            else:
+                self.refresh_row(self.active_row)
+
             self.highlight_active_row()
             self.update_product_suggestions()
 
@@ -312,9 +358,18 @@ class ProformaTableWindow(QMainWindow):
         if price is not None:
             self.model.set_price(self.state.active_row, price)
 
+        # Resetear estado
         self.state.reset()
         self.product_list.clear()
-        self.refresh_row(self.state.active_row)
+        self.product_list.hide()
+
+        # Sincronizar tabla con el modelo
+        self.sync_table_rows()
+
+        # Refrescar todas las filas relevantes
+        self.refresh_all_rows()
+        self.highlight_active_row()
+
 
     # ======================================================
     # Excel
@@ -326,3 +381,17 @@ class ProformaTableWindow(QMainWindow):
             self.status_label.setText(f"Excel creado: {path}")
         except Exception as e:
             self.status_label.setText(f"Error exportando Excel: {e}")
+
+    def add_product_row(self):
+        insert_at = self.active_row + 1
+
+        self.model.insert_row(insert_at, ProformaRow(type="PRODUCT"))
+
+        self.sync_table_rows()
+        self.refresh_all_rows()
+
+        self.active_row = insert_at
+        self.state.active_row = insert_at
+        self.highlight_active_row()
+
+

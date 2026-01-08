@@ -8,9 +8,9 @@ from PySide6.QtCore import QThread, Signal
 GRAMMAR = [
     "fila", "borrar", "cantidad", "precio",
     "uno", "dos", "tres", "cuatro", "cinco",
-    "consultoria", "hosting", "pintura_blanca",
-    "siguiente", "cancelar", "producto"
-]
+    "seis", "siete", "ocho", "nueve",
+    "siguiente", "cancelar", "producto", "titulo", "nuevo", "nueva", "detalle"
+] #se usa el de grammar_builder.py, este solo es fallback
 
 
 class VoiceListener(QThread):
