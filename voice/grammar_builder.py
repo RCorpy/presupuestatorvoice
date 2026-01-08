@@ -9,6 +9,10 @@ BASE_GRAMMAR = [
     "nueva",
     "titulo",
     "detalle", 
+    "vacia",
+    "borrar",
+    "coma",
+    "punto",
     "cero","uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 ]
 

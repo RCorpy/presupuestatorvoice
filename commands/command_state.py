@@ -58,6 +58,8 @@ class CommandState:
         self.active_row = 0
         self.current_command = None
 
+        self.number_buffer = ""
+
         # Producto
         self.in_product_mode = False
         self.product_buffer: list[str] = []
@@ -78,6 +80,7 @@ class CommandState:
     def reset(self):
         self.current_command = None
         self.in_product_mode = False
+        self.number_buffer = ""
         self.product_buffer.clear()
         self.product_matches.clear()
 
@@ -121,7 +124,22 @@ class CommandState:
             row.col_3 = ""
             row.col_4 = ""
             self.reset()
+            self.move_or_create_row(model)
             return "Fila vaciada"
+        
+        if word == "BORRAR":
+            model.remove_row(self.active_row)
+
+            if model.row_count() == 0:
+                model.add_row(ProformaRow(type="PRODUCT"))
+                self.active_row = 0
+            elif self.active_row >= model.row_count():
+                self.active_row = model.row_count() - 1
+
+            self.reset()
+            return "Fila borrada"
+
+
 
         # ==================================================
         # CANCELAR
@@ -142,34 +160,10 @@ class CommandState:
         # SIGUIENTE
         # ==================================================
 
-        if word == "SIGUIENTE":
-            current_row_type = model.get_row(self.active_row).type
-
-            # Si la fila actual es INFO o DETALLE
-            if current_row_type in ("INFO", "DETALLE"):
-                # Comprobar si la siguiente fila existe y es EMPTY
-                if self.active_row + 1 >= model.row_count() or model.get_row(self.active_row + 1).type != "EMPTY":
-                    model.insert_row(
-                        self.active_row + 1,
-                        ProformaRow(type="EMPTY")
-                    )
-                self.active_row += 1  # movernos a la fila EMPTY creada o ya existente
-
-            # Avanzar hasta la siguiente fila que no sea EMPTY
-            next_row = self.active_row + 1
-            while next_row < model.row_count() and model.get_row(next_row).type == "EMPTY":
-                next_row += 1
-
-            # Si llegamos al final, crear nueva PRODUCT
-            if next_row >= model.row_count():
-                model.add_row(ProformaRow(type="PRODUCT"))
-                next_row = model.row_count() - 1
-
-            self.active_row = next_row
+        if word == "SIGUIENTE" and self.current_command != "CANTIDAD" and self.current_command != "PRECIO":
+            self.move_or_create_row(model)
             self.reset()
-            return f"Fila siguiente ({self.active_row + 1})"
-
-
+            return "Fila siguiente"
 
 
         # ==================================================
@@ -195,17 +189,74 @@ class CommandState:
                 return f"Producto {word} asignado"
 
             # Activar comandos con valor
-            if word in ("FILA", "CANTIDAD", "PRECIO"):
+            if word in ("CANTIDAD", "PRECIO"):
                 self.current_command = word
-                return f"Comando {word} activo"
+                self.number_buffer = ""
+                return f"{word} activado, dicta números"
+
+            if word == "FILA":
+                self.current_command = "FILA"
+                return "Comando FILA activo"
+
 
             return f"Palabra no reconocida: {word}"
 
         # ==================================================
         # COMANDOS CON VALOR
         # ==================================================
+        if self.current_command in ("CANTIDAD", "PRECIO"):
 
-        if self.current_command == "FILA":
+            if word in ("COMA", "PUNTO"):
+                if "." not in self.number_buffer:
+                    self.number_buffer += "."
+                    return f"Valor parcial: {self.number_buffer}"
+                return "Ya hay un separador decimal"
+            elif word in self.WORD_TO_INT or word.isdigit():
+                digit = str(self.WORD_TO_INT.get(word, word))
+                self.number_buffer += digit
+            if word in self.WORD_TO_INT or word.isdigit() or word in ("COMA", "PUNTO"):
+                if self.current_command == "CANTIDAD":
+                    model.set_quantity(self.active_row, float(self.number_buffer))
+                else:
+                    model.set_price(self.active_row, float(self.number_buffer))
+                return f"Valor parcial: {self.number_buffer}"
+
+            if word == "SIGUIENTE":
+                if not self.number_buffer:
+                    self.reset()
+                    if self.current_command == "CANTIDAD":
+                        self.current_command = "PRECIO"
+                    elif self.current_command == "PRECIO":
+                        self.move_or_create_row(model)
+                        return "Sin precio"
+                    return "Sin valor"
+
+                if self.current_command == "CANTIDAD":
+                    model.set_quantity(self.active_row, float(self.number_buffer))
+                    msg = f"Cantidad asignada: {self.number_buffer}"
+                else:
+                    model.set_price(self.active_row, float(self.number_buffer))
+                    msg = f"Precio asignado: {self.number_buffer}"
+
+                self.reset()
+                return msg
+            if word == "FILA":
+                self.reset()
+                self.current_command = "FILA"
+                return "Comando FILA activo"
+            
+            if word in self.product_triggers:
+                self.reset()
+                self.in_product_mode = True
+                self.product_buffer.clear()
+                self.product_matches = list(self.materials.keys())
+                return "Modo producto activado"
+
+            if word == "CANCELAR":
+                self.reset()
+                return "Entrada cancelada"
+
+        elif self.current_command == "FILA":
             if word == "NUEVA":
                 model.add_row(ProformaRow(type="PRODUCT"))
                 self.active_row = model.row_count() - 1
@@ -290,3 +341,28 @@ class CommandState:
             f"({len(self.product_matches)} candidatos)"
         )
     
+    def move_or_create_row(self, model):
+        current_row_type = model.get_row(self.active_row).type
+
+        # Si la fila actual es INFO o DETALLE
+        if current_row_type in ("INFO", "DETALLE"):
+            # Comprobar si la siguiente fila existe y es EMPTY
+            if self.active_row + 1 >= model.row_count() or model.get_row(self.active_row + 1).type != "EMPTY":
+                model.insert_row(
+                    self.active_row + 1,
+                    ProformaRow(type="EMPTY")
+                )
+            self.active_row += 1  # movernos a la fila EMPTY creada o ya existente
+
+        # Avanzar hasta la siguiente fila que no sea EMPTY
+        next_row = self.active_row + 1
+        while next_row < model.row_count() and model.get_row(next_row).type == "EMPTY":
+            next_row += 1
+
+        # Si llegamos al final, crear nueva PRODUCT
+        if next_row >= model.row_count():
+            model.add_row(ProformaRow(type="PRODUCT"))
+            next_row = model.row_count() - 1
+
+        self.active_row = next_row
+        return f"Fila siguiente ({self.active_row + 1})"

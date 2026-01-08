@@ -137,6 +137,8 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         self.refresh_all_rows()
         self.highlight_active_row()
+        
+
 
 
     # ======================================================
@@ -151,8 +153,9 @@ class ProformaTableWindow(QMainWindow):
                     self.table.setItem(r, c, QTableWidgetItem(""))
 
     def highlight_active_row(self):
-        for r in range(self.table.rowCount()):
+        for r in range(min(self.table.rowCount(), self.model.row_count())):
             row_type = self.model.get_row(r).type
+
             for c in range(self.table.columnCount()):
                 item = self.table.item(r, c)
                 if item is None:
@@ -336,6 +339,7 @@ class ProformaTableWindow(QMainWindow):
                 self.refresh_row(self.active_row)
 
             self.highlight_active_row()
+            self.highlight_active_cell()
             self.update_product_suggestions()
 
     # ======================================================
@@ -394,4 +398,15 @@ class ProformaTableWindow(QMainWindow):
         self.state.active_row = insert_at
         self.highlight_active_row()
 
+    def highlight_active_cell(self):
+        if self.state.current_command == "CANTIDAD":
+            col = 2
+        elif self.state.current_command == "PRECIO":
+            col = 3
+        else:
+            return
+
+        item = self.table.item(self.active_row, col)
+        if item:
+            item.setBackground(Qt.cyan)
 
