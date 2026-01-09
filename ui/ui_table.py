@@ -2,10 +2,11 @@
 
 from PySide6.QtWidgets import (
     QMainWindow, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QHBoxLayout, QWidget,
+    QVBoxLayout, QHBoxLayout, QWidget, QGridLayout,
     QLineEdit, QLabel, QPushButton, QListWidget
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 from voice.voice_listener import VoiceListener
 from voice.voice_normalizer import normalize_command
@@ -38,9 +39,8 @@ class ProformaTableWindow(QMainWindow):
         self.voice_worker = None
 
         # --------------------------------------------------
-        # Filas iniciales (ejemplo funcional)
+        # Filas iniciales
         # --------------------------------------------------
-        #self.create_dummy_starting_rows()
         self.model.add_row(ProformaRow(type="PRODUCT"))
 
         # --------------------------------------------------
@@ -51,23 +51,77 @@ class ProformaTableWindow(QMainWindow):
 
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setAlignment(Qt.AlignTop)
+        sidebar_layout.setSpacing(10)
 
-        # Botones de acciones sobre la tabla
-        self.add_product_btn = QPushButton("➕ Fila")
+        # --- Botones principales ---
+        self.add_product_btn = QPushButton("➕")
+        self.add_product_btn.setFixedSize(40, 40)
+        self.add_product_btn.setToolTip("Añadir fila PRODUCT")
         self.add_product_btn.clicked.connect(self.add_product_row)
-        sidebar_layout.addWidget(self.add_product_btn)
+        sidebar_layout.addWidget(self.add_product_btn, alignment=Qt.AlignHCenter)
 
-        # Espacio flexible
+        self.delete_row_btn = QPushButton("🗑️")
+        self.delete_row_btn.setFixedSize(40, 40)
+        self.delete_row_btn.setToolTip("Borrar fila actual")
+        self.delete_row_btn.clicked.connect(self.delete_current_row)
+        sidebar_layout.addWidget(self.delete_row_btn, alignment=Qt.AlignHCenter)
+
+        # Separador
+        sidebar_layout.addSpacing(15)
+
+        # --- Grid tipos de fila ---
+        type_grid = QGridLayout()
+        type_grid.setSpacing(5)
+
+        self.btn_title = QPushButton("🏷️")
+        self.btn_title.setFixedSize(40, 40)
+        self.btn_title.setToolTip("Convertir en TITLE")
+        self.btn_title.clicked.connect(lambda: self.set_row_type("TITLE"))
+
+        self.btn_product = QPushButton("📦")
+        self.btn_product.setFixedSize(40, 40)
+        self.btn_product.setToolTip("Convertir en PRODUCT")
+        self.btn_product.clicked.connect(lambda: self.set_row_type("PRODUCT"))
+
+        self.btn_info = QPushButton("ℹ️")
+        self.btn_info.setFixedSize(40, 40)
+        self.btn_info.setToolTip("Convertir en INFO")
+        self.btn_info.clicked.connect(lambda: self.set_row_type("INFO"))
+
+        self.btn_empty = QPushButton("⬜")
+        self.btn_empty.setFixedSize(40, 40)
+        self.btn_empty.setToolTip("Convertir en EMPTY")
+        self.btn_empty.clicked.connect(lambda: self.set_row_type("EMPTY"))
+
+        type_grid.addWidget(self.btn_title, 0, 0)
+        type_grid.addWidget(self.btn_product, 0, 1)
+        type_grid.addWidget(self.btn_info, 1, 0)
+        type_grid.addWidget(self.btn_empty, 1, 1)
+
+        sidebar_layout.addLayout(type_grid)
+
+        self.row_type_buttons = {
+            "TITLE": self.btn_title,
+            "PRODUCT": self.btn_product,
+            "INFO": self.btn_info,
+            "EMPTY": self.btn_empty,
+        }
+
+        # Separador flexible
         sidebar_layout.addStretch()
 
-        # Botones globales
-        self.listen_button = QPushButton("🎙️ Escuchar")
+        # --- Botones globales ---
+        self.listen_button = QPushButton("🎙️")
+        self.listen_button.setFixedSize(40, 40)
+        self.listen_button.setToolTip("🎙️")
         self.listen_button.clicked.connect(self.listen_voice)
-        sidebar_layout.addWidget(self.listen_button)
+        sidebar_layout.addWidget(self.listen_button, alignment=Qt.AlignHCenter)
 
-        self.excel_button = QPushButton("💾 Exportar Excel")
+        self.excel_button = QPushButton("💾")
+        self.excel_button.setFixedSize(40, 40)
+        self.excel_button.setToolTip("Exportar a Excel")
         self.excel_button.clicked.connect(self.export_excel)
-        sidebar_layout.addWidget(self.excel_button)
+        sidebar_layout.addWidget(self.excel_button, alignment=Qt.AlignHCenter)
 
         # --------------------------------------------------
         # Tabla
@@ -81,7 +135,7 @@ class ProformaTableWindow(QMainWindow):
         self.table.cellClicked.connect(self.on_cell_clicked)
 
         # --------------------------------------------------
-        # Lista de productos (ProductBuffer)
+        # Lista de productos
         # --------------------------------------------------
         self.product_list = QListWidget()
         self.product_list.setMaximumWidth(350)
@@ -89,7 +143,7 @@ class ProformaTableWindow(QMainWindow):
         self.product_list.hide()
 
         # --------------------------------------------------
-        # Input de comandos
+        # Input comandos
         # --------------------------------------------------
         self.command_input = QLineEdit()
         self.command_input.setPlaceholderText(
@@ -124,6 +178,7 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         self.refresh_all_rows()
         self.highlight_active_row()
+
         
 
 
@@ -140,24 +195,38 @@ class ProformaTableWindow(QMainWindow):
                     self.table.setItem(r, c, QTableWidgetItem(""))
 
     def highlight_active_row(self):
-        for r in range(min(self.table.rowCount(), self.model.row_count())):
-            row_type = self.model.get_row(r).type
 
+        INFO_BG = QColor(250, 245, 230)
+        ACTIVE_INFO_BG = QColor(255, 255, 0, 100) 
+
+        self.update_row_type_buttons()
+        for r in range(self.table.rowCount()):
+            row = self.model.get_row(r)
             for c in range(self.table.columnCount()):
                 item = self.table.item(r, c)
-                if item is None:
+                if not item:
                     continue
 
-                # fila activa
                 if r == self.active_row:
-                    item.setBackground(Qt.yellow)
+                    # ACTIVE overrides, pero depende del tipo
+                    if row.type == "TITLE":
+                        item.setBackground(QColor(180, 200, 255))  # azul + highlight
+                    elif row.type == "INFO":
+                        item.setBackground(QColor(255, 255, 150)) 
+                    elif row.type == "EMPTY":
+                        item.setBackground(QColor(230, 230, 180))
+                    else:  # PRODUCT
+                        item.setBackground(ACTIVE_INFO_BG)
                     item.setForeground(Qt.black)
                 else:
-                    # color según tipo
-                    if row_type == "TITLE":
+                    # colores normales
+                    if row.type == "TITLE":
                         item.setBackground(Qt.blue)
                         item.setForeground(Qt.white)
-                    elif row_type == "EMPTY":
+                    elif row.type == "INFO":
+                        item.setBackground(INFO_BG)
+                        item.setForeground(Qt.black)
+                    elif row.type == "EMPTY":
                         item.setBackground(Qt.lightGray)
                         item.setForeground(Qt.black)
                     else:
@@ -296,14 +365,14 @@ class ProformaTableWindow(QMainWindow):
     def listen_voice(self):
         if not self.listening:
             self.listening = True
-            self.listen_button.setText("⏹️ Parar")
+            self.listen_button.setText("⏹️")
             grammar = build_grammar(self.materials)
             self.voice_worker = VoiceListener(grammar=grammar)
             self.voice_worker.result_ready.connect(self.on_voice_result)
             self.voice_worker.start()
         else:
             self.listening = False
-            self.listen_button.setText("🎙️ Escuchar")
+            self.listen_button.setText("🎙️")
             if self.voice_worker:
                 self.voice_worker.stop()
                 self.voice_worker = None
@@ -425,3 +494,67 @@ class ProformaTableWindow(QMainWindow):
             col_2="100% SÓLIDOS"
         ))
         self.model.add_row(ProformaRow(type="EMPTY"))
+
+    def delete_current_row(self):
+        if self.model.row_count() == 0:
+            return
+
+        row = self.active_row
+
+        # Borrar del modelo
+        self.model.remove_row(row)
+
+        # Si no quedan filas, crear una PRODUCT
+        if self.model.row_count() == 0:
+            self.model.add_row(ProformaRow(type="PRODUCT"))
+            self.active_row = 0
+
+        # Ajustar fila activa
+        if self.active_row >= self.model.row_count():
+            self.active_row = self.model.row_count() - 1
+
+        # 🔥 CLAVE: sincronizar número de filas de la tabla
+        self.table.setRowCount(self.model.row_count())
+
+        # Asegurar items
+        self._init_table_items()
+
+        # Refrescar todo
+        self.refresh_all_rows()
+        self.highlight_active_row()
+
+        
+    def set_row_type(self, new_type: str):
+        if self.active_row < 0 or self.active_row >= self.model.row_count():
+            return
+
+        row = self.model.get_row(self.active_row)
+
+        # Si ya es de ese tipo, no hacemos nada
+        if row.type == new_type:
+            return
+
+        # Resetear contenido según tipo
+        if new_type == "TITLE":
+            self.model.rows[self.active_row] = ProformaRow(type="TITLE", col_1=row.col_1 or "")
+        elif new_type == "PRODUCT":
+            self.model.rows[self.active_row] = ProformaRow(type="PRODUCT")
+        elif new_type == "INFO":
+            self.model.rows[self.active_row] = ProformaRow(type="INFO")
+        elif new_type == "EMPTY":
+            self.model.rows[self.active_row] = ProformaRow(type="EMPTY")
+
+        # Refrescar UI
+        self.refresh_row(self.active_row)
+        self.highlight_active_row()
+
+    def update_row_type_buttons(self):
+        current_type = self.model.get_row(self.active_row).type
+
+        for row_type, button in self.row_type_buttons.items():
+            if row_type == current_type:
+                button.setStyleSheet(
+                    "background-color: #ffd966; font-weight: bold;"
+                )
+            else:
+                button.setStyleSheet("")
