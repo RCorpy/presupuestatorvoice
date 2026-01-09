@@ -237,18 +237,22 @@ class ProformaTableWindow(QMainWindow):
         self.active_row = row
         self.state.active_row = row
 
-        if column == 2:
-            self.state.current_command = "CANTIDAD"
-            self.state.number_buffer = ""
-        elif column == 3:
-            self.state.current_command = "PRECIO"
-            self.state.number_buffer = ""
+        row_type = self.model.get_row(row).type
+
+        # Solo PRODUCT + columna PRODUCTO
+        if row_type == "PRODUCT" and column == 1:
+            self.state.in_product_mode = True
+            self.state.product_buffer.clear()
+            self.state.product_matches = list(self.materials.keys())
         else:
+            self.state.in_product_mode = False
             self.state.current_command = None
 
         self.highlight_active_row()
         self.highlight_active_cell()
         self.update_product_suggestions()
+
+
 
 
     def refresh_row(self, row_index):
@@ -325,32 +329,40 @@ class ProformaTableWindow(QMainWindow):
                         self.table.setItem(r, c, QTableWidgetItem(""))
 
     def on_cell_changed(self, row, column):
-        """Actualiza los datos del modelo cuando el usuario edita la celda"""
         proforma_row = self.model.get_row(row)
-        if proforma_row.type != "PRODUCT":
+        item = self.table.item(row, column)
+        if not item:
             return
 
-        text = self.table.item(row, column).text() or ""
+        text = item.text() or ""
 
+        # --- PRODUCTO con lógica especial ---
+        if proforma_row.type == "PRODUCT" and column == 1:
+            self.model.set_product(row, text)
+            self.refresh_row(row)
+            return
+
+        # --- Cualquier otro caso: texto plano ---
         if column == 0:
-            # Columna 0 → KITS
             proforma_row.col_0 = text
         elif column == 1:
-            # Columna 1 → Nombre producto
-            self.model.set_product(row, text)
-            # Auto-asignar precio unitario si existe
-            price = self.model.get_price_from_db(text)
-            if price is not None:
-                self.model.set_price(row, price)
+            proforma_row.col_1 = text
         elif column == 2:
-            # Columna 2 → Cantidad
-            self.model.set_quantity(row, text)
+            proforma_row.col_2 = text
         elif column == 3:
-            # Columna 3 → Precio unitario
-            self.model.set_price(row, text)
+            proforma_row.col_3 = text
+        elif column == 4:
+            proforma_row.col_4 = text
 
-        # Total siempre se recalcula en set_quantity o set_price
-        self.refresh_row(row)
+
+        # ----------------------
+        # INFO / TITLE
+        # ----------------------
+        if proforma_row.type in ("INFO", "TITLE"):
+            if column == 1:
+                proforma_row.col_1 = text
+                self.refresh_row(row)
+
 
 
     # ======================================================
