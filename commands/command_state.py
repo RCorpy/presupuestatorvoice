@@ -69,7 +69,7 @@ class CommandState:
             name: normalize_product_tokens(name)
             for name in self.materials.keys()
         }
-
+        self.product_mode_triggers = {"PRODUCTO"}
         self.product_triggers = [
             t.strip().upper()
             for t in os.getenv("PRODUCT_TRIGGER_WORDS", "PRODUCTO").split(",")
@@ -133,8 +133,10 @@ class CommandState:
             if model.row_count() == 0:
                 model.add_row(ProformaRow(type="PRODUCT"))
                 self.active_row = 0
-            elif self.active_row >= model.row_count():
+            if self.active_row >= model.row_count():
+                model.add_row(ProformaRow(type="PRODUCT"))
                 self.active_row = model.row_count() - 1
+
 
             self.reset()
             return "Fila borrada"
@@ -175,9 +177,17 @@ class CommandState:
             # Activar modo producto
             if word in self.product_triggers:
                 self.in_product_mode = True
-                self.product_buffer.clear()
-                self.product_matches = list(self.materials.keys())
-                return "Modo producto activado"
+                if word in self.product_mode_triggers:
+                    self.product_buffer.clear()
+                    self.product_matches = list(self.materials.keys())
+                else:
+                    self.product_buffer = [word]
+                    self.product_matches = [
+                        p for p, tokens in self.material_tokens.items()
+                        if word in tokens
+                    ]
+                return f"Modo producto: {word} ({len(self.product_matches)} candidatos)"
+
 
             # Producto directo (compatibilidad)
             if word in self.materials:
@@ -231,12 +241,20 @@ class CommandState:
                         return "Sin precio"
                     return "Sin valor"
 
+                value = float(self.number_buffer)
+
                 if self.current_command == "CANTIDAD":
-                    model.set_quantity(self.active_row, float(self.number_buffer))
-                    msg = f"Cantidad asignada: {self.number_buffer}"
+                    if value.is_integer():
+                        model.set_quantity(self.active_row, int(value))
+                        msg = f"Cantidad asignada: {int(value)}"
+                    else:
+                        model.set_quantity(self.active_row, value)
+                        msg = f"Cantidad asignada: {value}"
                 else:
-                    model.set_price(self.active_row, float(self.number_buffer))
-                    msg = f"Precio asignado: {self.number_buffer}"
+                    formatted = f"{value:.2f}"
+                    model.set_price(self.active_row, formatted)
+                    msg = f"Precio asignado: {formatted}"
+
 
                 self.reset()
                 return msg
@@ -246,11 +264,18 @@ class CommandState:
                 return "Comando FILA activo"
             
             if word in self.product_triggers:
-                self.reset()
                 self.in_product_mode = True
-                self.product_buffer.clear()
-                self.product_matches = list(self.materials.keys())
-                return "Modo producto activado"
+                if word in self.product_mode_triggers:
+                    self.product_buffer.clear()
+                    self.product_matches = list(self.materials.keys())
+                else:
+                    self.product_buffer = [word]
+                    self.product_matches = [
+                        p for p, tokens in self.material_tokens.items()
+                        if word in tokens
+                    ]
+                return f"Modo producto: {word} ({len(self.product_matches)} candidatos)"
+
 
             if word == "CANCELAR":
                 self.reset()

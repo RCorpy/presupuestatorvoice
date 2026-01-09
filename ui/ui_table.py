@@ -40,21 +40,8 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         # Filas iniciales (ejemplo funcional)
         # --------------------------------------------------
-        self.model.add_row(ProformaRow(type="TITLE", col_1="2 CAPAS EPOXI VERDE"))
-        self.model.add_row(ProformaRow(
-            type="PRODUCT",
-            col_0="KIT 18 KG",
-            col_1="KIT EPOXI VERDE",
-            col_2="1",
-            col_3="120",
-            col_4="120"
-        ))
-        self.model.add_row(ProformaRow(
-            type="INFO",
-            col_1="CATALIZADOR 5:1",
-            col_2="100% SÓLIDOS"
-        ))
-        self.model.add_row(ProformaRow(type="EMPTY"))
+        #self.create_dummy_starting_rows()
+        self.model.add_row(ProformaRow(type="PRODUCT"))
 
         # --------------------------------------------------
         # Barra lateral izquierda
@@ -66,7 +53,7 @@ class ProformaTableWindow(QMainWindow):
         sidebar_layout.setAlignment(Qt.AlignTop)
 
         # Botones de acciones sobre la tabla
-        self.add_product_btn = QPushButton("➕ Producto")
+        self.add_product_btn = QPushButton("➕ Fila")
         self.add_product_btn.clicked.connect(self.add_product_row)
         sidebar_layout.addWidget(self.add_product_btn)
 
@@ -180,8 +167,20 @@ class ProformaTableWindow(QMainWindow):
     def on_cell_clicked(self, row, column):
         self.active_row = row
         self.state.active_row = row
+
+        if column == 2:
+            self.state.current_command = "CANTIDAD"
+            self.state.number_buffer = ""
+        elif column == 3:
+            self.state.current_command = "PRECIO"
+            self.state.number_buffer = ""
+        else:
+            self.state.current_command = None
+
         self.highlight_active_row()
+        self.highlight_active_cell()
         self.update_product_suggestions()
+
 
     def refresh_row(self, row_index):
         self.table.blockSignals(True)
@@ -410,3 +409,19 @@ class ProformaTableWindow(QMainWindow):
         if item:
             item.setBackground(Qt.cyan)
 
+    def create_dummy_starting_rows(self):
+        self.model.add_row(ProformaRow(type="TITLE", col_1="2 CAPAS EPOXI VERDE"))
+        self.model.add_row(ProformaRow(
+            type="PRODUCT",
+            col_0="KIT 18 KG",
+            col_1="KIT EPOXI VERDE",
+            col_2="1",
+            col_3="120",
+            col_4="120"
+        ))
+        self.model.add_row(ProformaRow(
+            type="INFO",
+            col_1="CATALIZADOR 5:1",
+            col_2="100% SÓLIDOS"
+        ))
+        self.model.add_row(ProformaRow(type="EMPTY"))

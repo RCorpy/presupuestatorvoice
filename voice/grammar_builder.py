@@ -13,6 +13,9 @@ BASE_GRAMMAR = [
     "borrar",
     "coma",
     "punto",
+    "acrilica",
+    "no",
+    "si",
     "cero","uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 ]
 

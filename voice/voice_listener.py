@@ -9,6 +9,7 @@ GRAMMAR = [
     "fila", "borrar", "cantidad", "precio",
     "uno", "dos", "tres", "cuatro", "cinco",
     "seis", "siete", "ocho", "nueve",
+    "acrilica", "no", "si",
     "siguiente", "cancelar", "producto", "titulo", "nuevo", "nueva", "detalle"
 ] #se usa el de grammar_builder.py, este solo es fallback
 
