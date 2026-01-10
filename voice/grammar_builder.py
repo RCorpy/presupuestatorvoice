@@ -16,6 +16,7 @@ BASE_GRAMMAR = [
     "acrilica",
     "no",
     "si",
+    "polizon",
     "cero","uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 ]
 

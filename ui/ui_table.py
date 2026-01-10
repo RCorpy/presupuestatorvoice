@@ -13,6 +13,7 @@ from voice.voice_normalizer import normalize_command
 from voice.grammar_builder import build_grammar
 
 from commands.command_state import CommandState
+from commands.command_state import CommandMode
 from excel.excel_exporter import export_proforma_to_excel
 from db.materials_repository import load_materials
 
@@ -126,6 +127,14 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         # Tabla
         # --------------------------------------------------
+
+
+        self.HIGHLIGHT_COLORS = {
+            "PRODUCT": QColor(255, 230, 160),
+            "INFO":    QColor(230, 230, 200),
+            "TITLE":   QColor(220, 220, 220),
+            "EMPTY":   QColor(210, 210, 210),
+        }
         self.table = QTableWidget(self.model.row_count(), 5)
         self.table.setHorizontalHeaderLabels(
             ["KITS", "PRODUCTO", "CANTIDAD", "PRECIO", "TOTAL"]
@@ -195,12 +204,18 @@ class ProformaTableWindow(QMainWindow):
                     self.table.setItem(r, c, QTableWidgetItem(""))
 
     def highlight_active_row(self):
+        row_count = self.model.row_count()
+        if row_count == 0:
+            return  # nada que hacer
 
         INFO_BG = QColor(250, 245, 230)
-        ACTIVE_INFO_BG = QColor(255, 255, 0, 100) 
+        ACTIVE_INFO_BG = QColor(255, 255, 0, 100)
 
         self.update_row_type_buttons()
         for r in range(self.table.rowCount()):
+            if r >= row_count:
+                continue  # evitar pedir filas que no existen
+
             row = self.model.get_row(r)
             for c in range(self.table.columnCount()):
                 item = self.table.item(r, c)
@@ -208,11 +223,11 @@ class ProformaTableWindow(QMainWindow):
                     continue
 
                 if r == self.active_row:
-                    # ACTIVE overrides, pero depende del tipo
+                    # ACTIVE overrides, depende del tipo
                     if row.type == "TITLE":
                         item.setBackground(QColor(180, 200, 255))  # azul + highlight
                     elif row.type == "INFO":
-                        item.setBackground(QColor(255, 255, 150)) 
+                        item.setBackground(QColor(255, 255, 150))
                     elif row.type == "EMPTY":
                         item.setBackground(QColor(230, 230, 180))
                     else:  # PRODUCT
@@ -233,6 +248,8 @@ class ProformaTableWindow(QMainWindow):
                         item.setBackground(Qt.white)
                         item.setForeground(Qt.black)
 
+
+
     def on_cell_clicked(self, row, column):
         self.active_row = row
         self.state.active_row = row
@@ -241,12 +258,11 @@ class ProformaTableWindow(QMainWindow):
 
         # Solo PRODUCT + columna PRODUCTO
         if row_type == "PRODUCT" and column == 1:
-            self.state.in_product_mode = True
+            self.state.mode = CommandMode.PRODUCT
             self.state.product_buffer.clear()
             self.state.product_matches = list(self.materials.keys())
         else:
-            self.state.in_product_mode = False
-            self.state.current_command = None
+            self.state.mode = CommandMode.IDLE
 
         self.highlight_active_row()
         self.highlight_active_cell()
@@ -254,64 +270,37 @@ class ProformaTableWindow(QMainWindow):
 
 
 
-
     def refresh_row(self, row_index):
-        self.table.blockSignals(True)
+        """
+        Actualiza la UI de la fila a partir del modelo sin entrar en bucles infinitos.
+        TITLE/INFO respetan manual edits en columnas 0–2.
+        """
         row = self.model.get_row(row_index)
 
-        # asegurar items existen
-        for c in range(self.table.columnCount()):
-            if self.table.item(row_index, c) is None:
-                self.table.setItem(row_index, c, QTableWidgetItem(""))
+        self.table.blockSignals(True)  # 🔹 bloquear señales
 
-        # TITLE
-        if row.type == "TITLE":
-            item = self.table.item(row_index, 0)
-            item.setText(row.col_1)
-            item.setBackground(Qt.blue)
-            item.setForeground(Qt.black)
-            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        for col_index in range(5):
+            current_text = row.as_list()[col_index]
 
-        # PRODUCT
-        elif row.type == "PRODUCT":
-            values = [row.col_0, row.col_1, row.col_2, row.col_3, row.col_4]
-            for c, value in enumerate(values):
-                item = self.table.item(row_index, c)
-                if item:
-                    item.setText(value or "")
+            # TITLE/INFO: respetar manual edits en columnas 0–2
+            if row.type in ("TITLE", "INFO") and col_index < 3:
+                # Solo actualizar si la celda está vacía
+                item = self.table.item(row_index, col_index)
+                if item is None:
+                    item = QTableWidgetItem(current_text)
+                    self.table.setItem(row_index, col_index, item)
+                continue
 
-            # columna TOTAL no editable
-            total_item = self.table.item(row_index, 4)
-            if total_item:
-                total_item.setFlags(total_item.flags() & ~Qt.ItemIsEditable)
-
-        # INFO
-        elif row.type == "INFO":
-            item0 = self.table.item(row_index, 0)
-            item1 = self.table.item(row_index, 1)
-            if item0: item0.setText(row.col_1 or "")
-            if item1: item1.setText(row.col_2 or "")
-            for item in (item0, item1):
-                if item:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-
-        # EMPTY → marcar gris o highlight si activa
-        elif row.type == "EMPTY":
-            for c in range(self.table.columnCount()):
-                item = self.table.item(row_index, c)
-                if item:
-                    item.setText("")
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    if row_index == self.active_row:
-                        # fila activa → amarillo
-                        item.setBackground(Qt.yellow)
-                        item.setForeground(Qt.black)
-                    else:
-                        # fila normal → gris
-                        item.setBackground(Qt.lightGray)
-                        item.setForeground(Qt.black)
+            # PRODUCT/EMPTY: siempre reflejar modelo
+            item = self.table.item(row_index, col_index)
+            if item is None:
+                item = QTableWidgetItem(current_text)
+                self.table.setItem(row_index, col_index, item)
+            else:
+                item.setText(current_text)
 
         self.table.blockSignals(False)
+
 
     def refresh_all_rows(self):
         for r in range(self.model.row_count()):
@@ -336,13 +325,7 @@ class ProformaTableWindow(QMainWindow):
 
         text = item.text() or ""
 
-        # --- PRODUCTO con lógica especial ---
-        if proforma_row.type == "PRODUCT" and column == 1:
-            self.model.set_product(row, text)
-            self.refresh_row(row)
-            return
-
-        # --- Cualquier otro caso: texto plano ---
+        # Actualizar modelo **directamente**
         if column == 0:
             proforma_row.col_0 = text
         elif column == 1:
@@ -355,13 +338,24 @@ class ProformaTableWindow(QMainWindow):
             proforma_row.col_4 = text
 
 
-        # ----------------------
-        # INFO / TITLE
-        # ----------------------
-        if proforma_row.type in ("INFO", "TITLE"):
-            if column == 1:
-                proforma_row.col_1 = text
-                self.refresh_row(row)
+        # Solo recalcular TOTAL si es PRODUCT
+        if proforma_row.type == "PRODUCT":
+            try:
+                qty = float(proforma_row.col_2)
+            except (ValueError, TypeError):
+                qty = 0
+            try:
+                price = float(proforma_row.col_3)
+            except (ValueError, TypeError):
+                price = 0
+            proforma_row.col_4 = str(round(qty * price, 2)) if qty * price != 0 else ""
+
+        # 🔹 NO refrescar TITLE/INFO columnas 0–2 para evitar sobrescribir edits
+        if proforma_row.type in ("TITLE", "INFO"):
+            self.refresh_row(row_index=row)  # se respeta manual edit
+        else:
+            self.refresh_row(row_index=row)
+
 
 
 
@@ -395,7 +389,9 @@ class ProformaTableWindow(QMainWindow):
         self.refresh_all_rows()
 
     def _process_tokens(self, tokens):
-        repeat_allowed = ["SIGUIENTE", "NUEVA", "PRODUCTO", "KIT", "EPOXI"]
+        repeat_allowed = ["SIGUIENTE", "NUEVA", "PRODUCTO", "KIT", "EPOXI",
+                        "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS",
+                        "SIETE", "OCHO", "NUEVE", "CERO"]
 
         for token in tokens:
             if token == self.last_token and token not in repeat_allowed:
@@ -408,19 +404,29 @@ class ProformaTableWindow(QMainWindow):
 
             after_rows = self.model.row_count()
 
-            self.active_row = self.state.active_row
+            # 🔹 Actualizar active_row desde CommandState
+            self.active_row = min(self.state.active_row, after_rows - 1) if after_rows > 0 else 0
+
             self.status_label.setText(msg)
 
-            # 🔴 CLAVE: si el modelo cambió, refrescar TODO
+            # 🔴 Sincronizar filas de tabla con el modelo
             if after_rows != before_rows:
-                self.sync_table_rows()
+                # Asegurarnos de eliminar filas sobrantes si se borraron
+                self.table.setRowCount(after_rows)
                 self.refresh_all_rows()
             else:
-                self.refresh_row(self.active_row)
+                # Solo refrescar la fila activa
+                if 0 <= self.active_row < after_rows:
+                    self.refresh_row(self.active_row)
 
-            self.highlight_active_row()
-            self.highlight_active_cell()
+            # 🔹 Highlight siempre sobre fila activa válida
+            if after_rows > 0:
+                self.highlight_active_row()
+                self.highlight_active_cell()
+
+            # 🔹 Actualizar sugerencias de producto
             self.update_product_suggestions()
+
 
     # ======================================================
     # ProductBuffer UI
@@ -428,12 +434,15 @@ class ProformaTableWindow(QMainWindow):
 
     def update_product_suggestions(self):
         self.product_list.clear()
-        if not self.state.in_product_mode:
+        if self.state.mode != CommandMode.PRODUCT:
             self.product_list.hide()
             return
+
         self.product_list.show()
         for product in self.state.product_matches[:50]:
             self.product_list.addItem(product)
+
+
 
     def on_product_clicked(self, item):
         product = item.text()
@@ -479,9 +488,9 @@ class ProformaTableWindow(QMainWindow):
         self.highlight_active_row()
 
     def highlight_active_cell(self):
-        if self.state.current_command == "CANTIDAD":
+        if self.state.mode == CommandMode.QUANTITY:
             col = 2
-        elif self.state.current_command == "PRECIO":
+        elif self.state.mode == CommandMode.PRICE:
             col = 3
         else:
             return
@@ -516,24 +525,16 @@ class ProformaTableWindow(QMainWindow):
         # Borrar del modelo
         self.model.remove_row(row)
 
-        # Si no quedan filas, crear una PRODUCT
-        if self.model.row_count() == 0:
-            self.model.add_row(ProformaRow(type="PRODUCT"))
-            self.active_row = 0
-
         # Ajustar fila activa
         if self.active_row >= self.model.row_count():
             self.active_row = self.model.row_count() - 1
 
-        # 🔥 CLAVE: sincronizar número de filas de la tabla
+        # 🔹 Refrescar tabla completa
         self.table.setRowCount(self.model.row_count())
-
-        # Asegurar items
-        self._init_table_items()
-
-        # Refrescar todo
+        self._init_table_items()           # asegura que todos los QTableWidgetItem existen
         self.refresh_all_rows()
         self.highlight_active_row()
+
 
         
     def set_row_type(self, new_type: str):

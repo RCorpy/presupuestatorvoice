@@ -1,11 +1,14 @@
 # models/proforma_model.py
 from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
+from copy import deepcopy
+
 
 PRODUCT_INFO_RULES = {
     "EPOXI": "Catalizador 5:1",
-    "POLIURETANO": "Catalizador 4:1",
+    "POLITOP": "Resina monocomponente",
 }
+
 
 class ProformaModel:
     def __init__(self):
@@ -17,10 +20,12 @@ class ProformaModel:
     # --------------------
 
     def add_row(self, row: ProformaRow):
-        self.rows.append(row)
+        # 🔹 Siempre añadir una copia independiente
+        self.rows.append(deepcopy(row))
 
     def insert_row(self, index: int, row: ProformaRow):
-        self.rows.insert(index, row)
+        # 🔹 Siempre insertar una copia independiente
+        self.rows.insert(index, deepcopy(row))
 
     def remove_row(self, index: int):
         if 0 <= index < len(self.rows):
@@ -31,6 +36,7 @@ class ProformaModel:
 
     def get_row(self, index) -> ProformaRow:
         return self.rows[index]
+
 
     # --------------------
     # Product helpers
@@ -73,7 +79,7 @@ class ProformaModel:
         row = self.rows[row_index]
         if row.type != "PRODUCT":
             return
-        row.col_3 = str(price)  # PRECIO UNITARIO
+        row.col_3 = str(price)
         self._recalculate(row)
 
     # --------------------
@@ -81,12 +87,15 @@ class ProformaModel:
     # --------------------
 
     def _recalculate(self, row: ProformaRow):
+        if row.type != "PRODUCT":
+            return
         try:
             qty = float(row.col_2)
-            price = float(row.col_3)  # PRECIO UNITARIO
-            row.col_4 = str(qty * price)  # TOTAL
+            price = float(row.col_3)
+            row.col_4 = str(qty * price)
         except (ValueError, TypeError):
             row.col_4 = ""
+
 
     def get_price_from_db(self, product_name: str):
         material = self.materials.get(product_name)

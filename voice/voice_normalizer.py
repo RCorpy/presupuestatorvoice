@@ -27,6 +27,7 @@ def normalize_command(text: str) -> str:
         "EPOXY": "EPOXI",
         "EPOSI": "EPOXI",
         "NO": "CANCELAR",
+        "POLIZON": "POLITOP",
     }
 
     tokens = text.split()
