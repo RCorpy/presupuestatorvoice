@@ -1,3 +1,5 @@
+#voice_worker.py
+
 from PySide6.QtCore import QThread, Signal
 import json
 import queue

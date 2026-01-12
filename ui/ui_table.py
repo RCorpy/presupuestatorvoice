@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import (
     QMainWindow, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QHBoxLayout, QWidget, QGridLayout,
-    QLineEdit, QLabel, QPushButton, QListWidget
+    QLineEdit, QLabel, QPushButton, QListWidget, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -26,6 +26,9 @@ class ProformaTableWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("PresupuestatorVoice")
         self.resize(1100, 550)
+        self._updating_ui = False
+        self.user_editing = False
+
 
         # --------------------------------------------------
         # Datos / estado
@@ -149,6 +152,10 @@ class ProformaTableWindow(QMainWindow):
         self.product_list = QListWidget()
         self.product_list.setMaximumWidth(350)
         self.product_list.itemClicked.connect(self.on_product_clicked)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.table.setItemDelegate(UserEditDelegate(self))
+
+
         self.product_list.hide()
 
         # --------------------------------------------------
@@ -185,10 +192,19 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         # Refresco inicial
         # --------------------------------------------------
+        #self.create_dummy_starting_rows()
+        self.table.setRowCount(self.model.row_count())
+        self._init_table_items()
         self.refresh_all_rows()
         self.highlight_active_row()
 
-        
+
+        self.table.setColumnWidth(0, 200)  # suficiente para mostrar info
+        self.table.setColumnWidth(1, 250)  # producto
+        self.table.setColumnWidth(2, 70)   # cantidad
+        self.table.setColumnWidth(3, 70)   # precio
+        self.table.setColumnWidth(4, 70)   # total
+
 
 
 
@@ -202,6 +218,7 @@ class ProformaTableWindow(QMainWindow):
             for c in range(self.table.columnCount()):
                 if self.table.item(r, c) is None:
                     self.table.setItem(r, c, QTableWidgetItem(""))
+                    
 
     def highlight_active_row(self):
         row_count = self.model.row_count()
@@ -276,30 +293,30 @@ class ProformaTableWindow(QMainWindow):
         TITLE/INFO respetan manual edits en columnas 0–2.
         """
         row = self.model.get_row(row_index)
-
-        self.table.blockSignals(True)  # 🔹 bloquear señales
+        self._updating_ui = True
+        self.table.blockSignals(True)
 
         for col_index in range(5):
             current_text = row.as_list()[col_index]
-
-            # TITLE/INFO: respetar manual edits en columnas 0–2
-            if row.type in ("TITLE", "INFO") and col_index < 3:
-                # Solo actualizar si la celda está vacía
-                item = self.table.item(row_index, col_index)
-                if item is None:
-                    item = QTableWidgetItem(current_text)
-                    self.table.setItem(row_index, col_index, item)
-                continue
-
-            # PRODUCT/EMPTY: siempre reflejar modelo
+            # 🔹 Obtener o crear el item siempre
             item = self.table.item(row_index, col_index)
             if item is None:
-                item = QTableWidgetItem(current_text)
+                item = QTableWidgetItem()
                 self.table.setItem(row_index, col_index, item)
-            else:
-                item.setText(current_text)
+
+            # ⚡ Asegurarse de que la celda esté habilitada
+            item.setFlags(item.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+
+            # Actualizar texto
+            item.setText(current_text)
+
+            # Mensaje de debug
+            #if row.type in ("TITLE", "INFO") and col_index < 2:
+            #    print("REFRESH", row.type, col_index, current_text)
 
         self.table.blockSignals(False)
+        self._updating_ui = False
+
 
 
     def refresh_all_rows(self):
@@ -318,14 +335,30 @@ class ProformaTableWindow(QMainWindow):
                         self.table.setItem(r, c, QTableWidgetItem(""))
 
     def on_cell_changed(self, row, column):
-        proforma_row = self.model.get_row(row)
+        if self._updating_ui:
+            return
+        if not self.user_editing:
+            return
         item = self.table.item(row, column)
         if not item:
             return
 
         text = item.text() or ""
+        proforma_row = self.model.get_row(row)
 
-        # Actualizar modelo **directamente**
+        # 🔒 Si el valor ya es el mismo, NO hacer nada
+        current = [
+            proforma_row.col_0,
+            proforma_row.col_1,
+            proforma_row.col_2,
+            proforma_row.col_3,
+            proforma_row.col_4,
+        ][column]
+
+        if text == current:
+            return
+
+        # ✅ UI → MODELO (única dirección permitida aquí)
         if column == 0:
             proforma_row.col_0 = text
         elif column == 1:
@@ -337,26 +370,20 @@ class ProformaTableWindow(QMainWindow):
         elif column == 4:
             proforma_row.col_4 = text
 
-
-        # Solo recalcular TOTAL si es PRODUCT
-        if proforma_row.type == "PRODUCT":
+        # 🔢 Recalcular TOTAL solo si toca
+        if proforma_row.type == "PRODUCT" and column in (2, 3):
             try:
                 qty = float(proforma_row.col_2)
-            except (ValueError, TypeError):
-                qty = 0
-            try:
                 price = float(proforma_row.col_3)
-            except (ValueError, TypeError):
-                price = 0
-            proforma_row.col_4 = str(round(qty * price, 2)) if qty * price != 0 else ""
-
-        # 🔹 NO refrescar TITLE/INFO columnas 0–2 para evitar sobrescribir edits
-        if proforma_row.type in ("TITLE", "INFO"):
-            self.refresh_row(row_index=row)  # se respeta manual edit
-        else:
-            self.refresh_row(row_index=row)
-
-
+                proforma_row.col_4 = str(round(qty * price, 2))
+            except:
+                proforma_row.col_4 = ""
+        if proforma_row.type == "PRODUCT" and column in (2, 3):
+            self._updating_ui = True
+            total_item = self.table.item(row, 4)
+            if total_item:
+                total_item.setText(proforma_row.col_4)
+            self._updating_ui = False
 
 
     # ======================================================
@@ -500,7 +527,11 @@ class ProformaTableWindow(QMainWindow):
             item.setBackground(Qt.cyan)
 
     def create_dummy_starting_rows(self):
-        self.model.add_row(ProformaRow(type="TITLE", col_1="2 CAPAS EPOXI VERDE"))
+        self.model.add_row(ProformaRow(
+            type="TITLE", 
+            col_0="KIT EPOXI", 
+            col_1="2 CAPAS EPOXI VERDE"
+        ))
         self.model.add_row(ProformaRow(
             type="PRODUCT",
             col_0="KIT 18 KG",
@@ -511,8 +542,9 @@ class ProformaTableWindow(QMainWindow):
         ))
         self.model.add_row(ProformaRow(
             type="INFO",
-            col_1="CATALIZADOR 5:1",
-            col_2="100% SÓLIDOS"
+            col_0="CATALIZADOR 5:1",
+            col_1="100% SÓLIDOS",
+            col_2="test"
         ))
         self.model.add_row(ProformaRow(type="EMPTY"))
 
@@ -541,25 +573,41 @@ class ProformaTableWindow(QMainWindow):
         if self.active_row < 0 or self.active_row >= self.model.row_count():
             return
 
-        row = self.model.get_row(self.active_row)
+        old_row = self.model.get_row(self.active_row)
 
-        # Si ya es de ese tipo, no hacemos nada
-        if row.type == new_type:
+        if old_row.type == new_type:
             return
 
-        # Resetear contenido según tipo
         if new_type == "TITLE":
-            self.model.rows[self.active_row] = ProformaRow(type="TITLE", col_1=row.col_1 or "")
-        elif new_type == "PRODUCT":
-            self.model.rows[self.active_row] = ProformaRow(type="PRODUCT")
-        elif new_type == "INFO":
-            self.model.rows[self.active_row] = ProformaRow(type="INFO")
-        elif new_type == "EMPTY":
-            self.model.rows[self.active_row] = ProformaRow(type="EMPTY")
+            new_row = ProformaRow(
+                type="TITLE",
+                col_0=old_row.col_0,
+                col_1=old_row.col_1
+            )
 
-        # Refrescar UI
+        elif new_type == "PRODUCT":
+            new_row = ProformaRow(type="PRODUCT")
+
+        elif new_type == "INFO":
+            new_row = ProformaRow(
+                type="INFO",
+                col_0=old_row.col_0,
+                col_1=old_row.col_1,
+                col_2=old_row.col_2,
+                col_3=old_row.col_3,
+                col_4=old_row.col_4,
+            )
+
+        elif new_type == "EMPTY":
+            new_row = ProformaRow(type="EMPTY")
+
+        else:
+            return  # seguridad
+
+        self.model.set_row(self.active_row, new_row)
         self.refresh_row(self.active_row)
         self.highlight_active_row()
+
 
     def update_row_type_buttons(self):
         current_type = self.model.get_row(self.active_row).type
@@ -571,3 +619,42 @@ class ProformaTableWindow(QMainWindow):
                 )
             else:
                 button.setStyleSheet("")
+
+    def _on_selection_changed(self):
+        self.user_editing = False
+
+    def refresh_row_except(self, row_index, except_column):
+        row = self.model.get_row(row_index)
+        self._updating_ui = True
+        self.table.blockSignals(True)
+
+        values = row.as_list()
+        for col in range(5):
+            if col == except_column:
+                continue  # ⚠️ NO tocar la celda editada
+
+            item = self.table.item(row_index, col)
+            if not item:
+                item = QTableWidgetItem()
+                self.table.setItem(row_index, col, item)
+
+            item.setText(values[col])
+
+        self.table.blockSignals(False)
+        self._updating_ui = False
+
+class UserEditDelegate(QStyledItemDelegate):
+    def __init__(self, table):
+        super().__init__(table)
+        self.table = table
+
+    def createEditor(self, parent, option, index):
+        self.table.user_editing = True
+        return super().createEditor(parent, option, index)
+
+    def destroyEditor(self, editor, index):
+        self.table.user_editing = False
+        super().destroyEditor(editor, index)
+
+
+

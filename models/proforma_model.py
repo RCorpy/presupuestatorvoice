@@ -2,12 +2,8 @@
 from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 from copy import deepcopy
-
-
-PRODUCT_INFO_RULES = {
-    "EPOXI": "Catalizador 5:1",
-    "POLITOP": "Resina monocomponente",
-}
+from models.row_factory import info_row
+from generator.resin_config import PRODUCT_INFO_RULES
 
 
 class ProformaModel:
@@ -37,6 +33,10 @@ class ProformaModel:
     def get_row(self, index) -> ProformaRow:
         return self.rows[index]
 
+    def set_row(self, index: int, new_row: ProformaRow):
+        if 0 <= index < len(self.rows):
+            self.rows[index] = new_row
+
 
     # --------------------
     # Product helpers
@@ -58,14 +58,16 @@ class ProformaModel:
         # ----------------------
         # Agregar INFO si aplica
         # ----------------------
-        info_text = self._infer_info_from_product(product_name)
+        info_text, extra_text = self._infer_info_from_product(product_name)
         if info_text:
             # Solo insertamos si la siguiente fila no es INFO ya
             if row_index + 1 >= len(self.rows) or self.rows[row_index + 1].type != "INFO":
-                self.insert_row(
-                    row_index + 1,
-                    ProformaRow(type="INFO", col_1=info_text)
-                )
+                # Crear ProformaRow con 1 o 2 columnas según lo que haya
+                row_to_insert = info_row(info_text, extra_text)  # info_row devuelve un ProformaRow
+                self.insert_row(row_index + 1, row_to_insert)
+
+
+
 
 
     def set_quantity(self, row_index: int, quantity):
@@ -106,5 +108,6 @@ class ProformaModel:
     def _infer_info_from_product(self, product_name):
         for key, text in PRODUCT_INFO_RULES.items():
             if key in product_name:
-                return text
-        return None
+                return text, ""  # siempre devuelve una tupla
+        return None, None
+

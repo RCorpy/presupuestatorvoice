@@ -1,3 +1,5 @@
+#grammar_builder.py
+
 BASE_GRAMMAR = [
     "fila",
     "cantidad",
@@ -22,9 +24,7 @@ BASE_GRAMMAR = [
 
 def build_grammar(materials: dict) -> list[str]:
     grammar = set(BASE_GRAMMAR)
-    print(materials)
     for name in materials.keys():
         grammar.add(name.lower())
-    print("printing grammar")
     
     return sorted(grammar)
