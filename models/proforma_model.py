@@ -3,7 +3,7 @@ from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 from copy import deepcopy
 from models.row_factory import info_row
-from generator.resin_config import PRODUCT_INFO_RULES
+from generator.resin_config import get_product_info
 
 
 class ProformaModel:
@@ -105,9 +105,11 @@ class ProformaModel:
             return None
         return material.get("price")
 
-    def _infer_info_from_product(self, product_name):
-        for key, text in PRODUCT_INFO_RULES.items():
-            if key in product_name:
-                return text, ""  # siempre devuelve una tupla
+    def _infer_info_from_product(self, system_key: str):
+        """
+        Devuelve la información asociada al sistema de resina.
+        """
+        info = get_product_info(system_key)
+        if info:
+            return info, ""
         return None, None
-

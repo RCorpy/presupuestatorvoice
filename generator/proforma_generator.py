@@ -2,11 +2,11 @@
 
 from models.proforma_row import ProformaRow
 from generator.resin_config import (
-    IMPRIMACIONES,
-    PRODUCT_INFO_RULES,
-    STANDARD_USAGE_KG_PER_M2,
+    get_primer_product,
+    get_usage_kg_per_m2,
+    build_product_name,
+    get_product_info,
     TOOLS,
-    DEFAULT_PRIMER_PRODUCT
 )
 from generator.kit_selector import select_kits
 
@@ -14,7 +14,7 @@ from generator.kit_selector import select_kits
 def generate_proforma(
     table_window,
     proforma_state,
-    resin_type: str,
+    system_key: str,
     work_type: str,
     area_m2: int,
     multiplier: float = 1.0,
@@ -24,15 +24,14 @@ def generate_proforma(
 ):
     """
     Genera o amplía una proforma en función del estado recibido.
-    El reseteo del estado se controla desde la UI (MainWindow).
+    El reseteo del estado se controla desde la UI.
     """
 
     model = table_window.model
     table = table_window.table
 
     # -------------------------------------------------
-    # 1️⃣ LIMPIEZA TOTAL DE UI + MODELO
-    # (el estado YA viene limpio o acumulado)
+    # 1️⃣ LIMPIEZA DE UI + MODELO
     # -------------------------------------------------
     model.rows.clear()
     table.clearContents()
@@ -43,20 +42,21 @@ def generate_proforma(
     table_window.refresh_all_rows()
 
     # -------------------------------------------------
-    # 2️⃣ Datos de cliente (se sobrescriben siempre)
+    # 2️⃣ Datos de cliente
     # -------------------------------------------------
     proforma_state.set_customer(customer_name, customer_phone)
 
     # -------------------------------------------------
-    # 3️⃣ IMPRIMACIÓN
+    # 3️⃣ IMPRIMACION
     # -------------------------------------------------
-    if "IMPRIMACIÓN" in work_type:
-        primer_product = IMPRIMACIONES.get(resin_type, DEFAULT_PRIMER_PRODUCT)
-        kg_total = area_m2 * STANDARD_USAGE_KG_PER_M2["IMPRIMACIÓN"]
+    if "IMPRIMACION" in work_type:
+        primer_product = get_primer_product(system_key)
+        kg_per_m2 = get_usage_kg_per_m2(system_key, "IMPRIMACION")
+        kg_total = area_m2 * kg_per_m2
 
         proforma_state.add_product_to_phase(
-            phase_type="IMPRIMACIÓN",
-            title="IMPRIMACIÓN",
+            phase_type="IMPRIMACION",
+            title="IMPRIMACION",
             product_name=primer_product,
             kg=kg_total
         )
@@ -74,8 +74,9 @@ def generate_proforma(
         if color:
             title += f" {color}"
 
-        product_name = f"Kit {resin_type} {title}"
-        kg_total = area_m2 * STANDARD_USAGE_KG_PER_M2["CAPA"] * num_layers
+        product_name = build_product_name(system_key, color)
+        kg_per_m2 = get_usage_kg_per_m2(system_key, "CAPA")
+        kg_total = area_m2 * kg_per_m2 * num_layers
 
         proforma_state.add_product_to_phase(
             phase_type="CAPAS",
@@ -85,29 +86,18 @@ def generate_proforma(
         )
 
     # -------------------------------------------------
-    # 5️⃣ RENDERIZAR TODA LA PROFORMA DESDE EL ESTADO
+    # 5️⃣ RENDERIZADO DESDE EL ESTADO
     # -------------------------------------------------
     rows = []
 
     # Cliente
     if proforma_state.customer_name or proforma_state.customer_phone:
         text = f"{proforma_state.customer_name or ''} {proforma_state.customer_phone or ''}".strip()
-        rows.append(
-            ProformaRow(
-                type="TITLE",
-                col_0="Cliente",
-                col_1=text
-            )
-        )
+        rows.append(ProformaRow(type="TITLE", col_0="Cliente", col_1=text))
 
-    # Fases (IMPRIMACIÓN, CAPAS, etc.)
+    # Fases
     for phase in proforma_state.phases:
-        rows.append(
-            ProformaRow(
-                type="TITLE",
-                col_0=phase.title
-            )
-        )
+        rows.append(ProformaRow(type="TITLE", col_0=phase.title))
 
         for product_name, total_kg in phase.products.items():
             kit_distribution = select_kits(total_kg)
@@ -116,41 +106,39 @@ def generate_proforma(
                 if amount <= 0:
                     continue
 
-                unit_price = round(100 * multiplier, 2)  # placeholder
-                total_price = round(amount * unit_price, 2)
-
-                rows.append(
-                    ProformaRow(
-                        type="PRODUCT",
-                        col_0=f"{kit_size} kg",
-                        col_1=product_name,
-                        col_2=str(amount),
-                        col_3=str(unit_price),
-                        col_4=str(total_price)
-                    )
+                # Crear la fila
+                row = ProformaRow(
+                    type="PRODUCT",
+                    col_0=f"{kit_size} kg",
+                    col_1=product_name,
+                    col_2=str(amount),
+                    col_3="",  # temporal, será reemplazado
+                    col_4="",  # temporal
                 )
 
-            info = PRODUCT_INFO_RULES.get(resin_type)
+                # Rellenar el precio desde la BD usando el modelo
+                price = table_window.model.get_price_from_db(product_name)
+                if price is not None:
+                    row.col_3 = str(round(price * multiplier, 2))  # aplicamos multiplicador si quieres
+                    row.col_4 = str(round(amount * float(row.col_3), 2))
+                else:
+                    row.col_3 = "not found"
+
+                # Añadir fila al modelo temporal
+                rows.append(row)
+
+
+            info = get_product_info(system_key)
             if info:
-                rows.append(
-                    ProformaRow(
-                        type="INFO",
-                        col_0=info
-                    )
-                )
+                rows.append(ProformaRow(type="INFO", col_0=info))
 
         rows.append(ProformaRow(type="EMPTY"))
 
     # -------------------------------------------------
-    # 6️⃣ HERRAMIENTAS (una sola vez)
+    # 6️⃣ HERRAMIENTAS
     # -------------------------------------------------
     if proforma_state.include_tools:
-        rows.append(
-            ProformaRow(
-                type="TITLE",
-                col_0="HERRAMIENTAS"
-            )
-        )
+        rows.append(ProformaRow(type="TITLE", col_0="HERRAMIENTAS"))
 
         for tool_name, amount, price in TOOLS:
             rows.append(
@@ -165,7 +153,7 @@ def generate_proforma(
             )
 
     # -------------------------------------------------
-    # 7️⃣ INYECTAR FILAS EN EL MODELO
+    # 7️⃣ INYECCIÓN EN EL MODELO
     # -------------------------------------------------
     for row in rows:
         model.add_row(row)

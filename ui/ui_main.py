@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from generator.proforma_generator import generate_proforma
-from pricing.multipliers import MULTIPLICADORES
+from generator.resin_config import RESIN_SYSTEMS, COLORS, get_cost_multiplier
 from state.proforma_state import ProformaState
 
 
@@ -16,17 +16,13 @@ from state.proforma_state import ProformaState
 # Configuración UI
 # ------------------------------
 
-RESIN_TYPES = ["EPOXI", "POLITOP", "IMPRIMACIÓN"]
-
 WORK_TYPES = [
-    "IMPRIMACIÓN",
+    "IMPRIMACION",
     "1 CAPA",
     "2 CAPAS",
-    "IMPRIMACIÓN + 1 CAPA",
-    "IMPRIMACIÓN + 2 CAPAS",
+    "IMPRIMACION + 1 CAPA",
+    "IMPRIMACION + 2 CAPAS",
 ]
-
-COLOR_OPTIONS = ["VERDE", "GRIS", "BLANCO", "NEGRO"]
 
 
 class MainWindow(QWidget):
@@ -37,8 +33,10 @@ class MainWindow(QWidget):
 
     def __init__(self, table_window):
         super().__init__()
+
         self.table_window = table_window
         self.proforma_state = ProformaState()
+
         layout = QHBoxLayout()
         layout.setAlignment(Qt.AlignLeft)
         layout.setSpacing(12)
@@ -58,11 +56,15 @@ class MainWindow(QWidget):
         layout.addWidget(self.phone_input)
 
         # ------------------------------
-        # Resina
+        # Sistema de resina
         # ------------------------------
         layout.addWidget(QLabel("Resina:"))
         self.resin_combo = QComboBox()
-        self.resin_combo.addItems(RESIN_TYPES)
+
+        # label visible + system_key interno
+        for system_key, data in RESIN_SYSTEMS.items():
+            self.resin_combo.addItem(data["label"], system_key)
+
         self.resin_combo.currentIndexChanged.connect(self.on_resin_changed)
         layout.addWidget(self.resin_combo)
 
@@ -88,7 +90,7 @@ class MainWindow(QWidget):
         # ------------------------------
         layout.addWidget(QLabel("Color:"))
         self.color_combo = QComboBox()
-        self.color_combo.addItems(COLOR_OPTIONS)
+        self.color_combo.addItems(COLORS)
         layout.addWidget(self.color_combo)
 
         # ------------------------------
@@ -113,7 +115,7 @@ class MainWindow(QWidget):
         self.add_btn.clicked.connect(self.add_products)
         layout.addWidget(self.add_btn)
 
-        # Inicializar multiplicador
+        # Inicializar multiplicador según resina inicial
         self.on_resin_changed(self.resin_combo.currentIndex())
 
     # -------------------------------------------------
@@ -121,8 +123,14 @@ class MainWindow(QWidget):
     # -------------------------------------------------
 
     def on_resin_changed(self, _):
-        resin = self.resin_combo.currentText()
-        self.multiplier_spin.setValue(MULTIPLICADORES.get(resin, 1.0))
+        """
+        Ajusta el multiplicador por defecto según el sistema de resina.
+        El usuario puede modificarlo después manualmente.
+        """
+        system_key = self.resin_combo.currentData()
+        self.multiplier_spin.setValue(
+            get_cost_multiplier(system_key)
+        )
 
     # -------------------------------------------------
     # Acciones
@@ -131,7 +139,7 @@ class MainWindow(QWidget):
     def _collect_form_data(self):
         """Recoge todos los datos del formulario."""
         return dict(
-            resin_type=self.resin_combo.currentText(),
+            system_key=self.resin_combo.currentData(),  # 👈 CLAVE INTERNA
             work_type=self.work_combo.currentText(),
             area_m2=self.area_spin.value(),
             multiplier=self.multiplier_spin.value(),
@@ -144,7 +152,7 @@ class MainWindow(QWidget):
         """Crea una proforma desde cero."""
         data = self._collect_form_data()
 
-        # 🔥 RESET REAL DEL ESTADO
+        # 🔥 Reset REAL del estado acumulado
         self.proforma_state.reset()
 
         generate_proforma(
@@ -153,8 +161,8 @@ class MainWindow(QWidget):
             **data
         )
 
-
     def add_products(self):
+        """Añade productos a la proforma actual."""
         data = self._collect_form_data()
 
         generate_proforma(
@@ -162,5 +170,3 @@ class MainWindow(QWidget):
             proforma_state=self.proforma_state,
             **data
         )
-
-
