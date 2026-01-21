@@ -34,8 +34,9 @@ class ProformaTableWindow(QMainWindow):
         # Datos / estado
         # --------------------------------------------------
         self.materials = load_materials()
-        self.model = ProformaModel()
+
         self.state = CommandState(self.materials)
+        self.model = ProformaModel(state=self.state)
 
         self.active_row = 0
         self.last_token = None
@@ -151,7 +152,6 @@ class ProformaTableWindow(QMainWindow):
         # --------------------------------------------------
         self.product_list = QListWidget()
         self.product_list.setMaximumWidth(350)
-        self.product_list.itemClicked.connect(self.on_product_clicked)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.setItemDelegate(UserEditDelegate(self))
 
@@ -471,24 +471,22 @@ class ProformaTableWindow(QMainWindow):
 
 
 
-    def on_product_clicked(self, item):
+    def on_product_clicked(self, item, multiplier: float):
         product = item.text()
-        self.model.set_product(self.state.active_row, product)
-        price = self.model.get_price_from_db(product)
-        if price is not None:
-            self.model.set_price(self.state.active_row, price)
+        print("multiplier", multiplier)
+        self.model.set_product(self.state.active_row, product, multiplier=multiplier)
 
         # Resetear estado
         self.state.reset()
         self.product_list.clear()
         self.product_list.hide()
 
-        # Sincronizar tabla con el modelo
+        # Sincronizar tabla
         self.sync_table_rows()
-
-        # Refrescar todas las filas relevantes
         self.refresh_all_rows()
         self.highlight_active_row()
+
+
 
 
     # ======================================================

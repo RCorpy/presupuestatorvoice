@@ -117,6 +117,8 @@ class MainWindow(QWidget):
 
         # Inicializar multiplicador según resina inicial
         self.on_resin_changed(self.resin_combo.currentIndex())
+        # Supongamos que tienes algo como esto en MainWindow
+        self.table_window.product_list.itemClicked.connect(self.on_product_selected)
 
     # -------------------------------------------------
     # Eventos
@@ -137,9 +139,8 @@ class MainWindow(QWidget):
     # -------------------------------------------------
 
     def _collect_form_data(self):
-        """Recoge todos los datos del formulario."""
         return dict(
-            system_key=self.resin_combo.currentData(),  # 👈 CLAVE INTERNA
+            system_key=self.resin_combo.currentData(),
             work_type=self.work_combo.currentText(),
             area_m2=self.area_spin.value(),
             multiplier=self.multiplier_spin.value(),
@@ -147,6 +148,7 @@ class MainWindow(QWidget):
             customer_name=self.name_input.text(),
             customer_phone=self.phone_input.text(),
         )
+
 
     def generate_new_proforma(self):
         """Crea una proforma desde cero."""
@@ -170,3 +172,7 @@ class MainWindow(QWidget):
             proforma_state=self.proforma_state,
             **data
         )
+
+    def on_product_selected(self, item):
+        multiplier = self.multiplier_spin.value()
+        self.table_window.on_product_clicked(item, multiplier)

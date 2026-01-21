@@ -3,13 +3,15 @@ from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 from copy import deepcopy
 from models.row_factory import info_row
-from generator.resin_config import get_product_info
+from generator.resin_config import get_product_info, RESIN_SYSTEMS
+import re
 
 
 class ProformaModel:
-    def __init__(self):
+    def __init__(self, state=None):
         self.rows: list[ProformaRow] = []
         self.materials = load_materials()  # cache en memoria
+        self.state = state
 
     # --------------------
     # Row management
@@ -42,29 +44,38 @@ class ProformaModel:
     # Product helpers
     # --------------------
 
-    def set_product(self, row_index: int, product_name: str):
-        row = self.rows[row_index]
+    def set_product(self, row_index: int, product_name: str, multiplier: float):
+        row = self.get_row(row_index)
         if row.type != "PRODUCT":
             return
 
         row.col_1 = product_name
 
-        # Precio unitario
-        price = self.get_price_from_db(product_name)
-        if price is not None:
-            row.col_3 = str(price)
-            self._recalculate(row)
+        base_price = self.get_price_from_db(product_name)
+        if base_price is None:
+            row.col_3 = "not found"
+            return
 
-        # ----------------------
-        # Agregar INFO si aplica
-        # ----------------------
-        info_text, extra_text = self._infer_info_from_product(product_name)
-        if info_text:
-            # Solo insertamos si la siguiente fila no es INFO ya
-            if row_index + 1 >= len(self.rows) or self.rows[row_index + 1].type != "INFO":
-                # Crear ProformaRow con 1 o 2 columnas según lo que haya
-                row_to_insert = info_row(info_text, extra_text)  # info_row devuelve un ProformaRow
-                self.insert_row(row_index + 1, row_to_insert)
+        # Detectar tamaño del kit
+        import re
+        kit_multiplier = 1
+        col0_lower = row.col_0.lower()
+        match = re.search(r"\b(6|12|18|24)\b", col0_lower)
+        if match:
+            kit_multiplier = int(match.group(1))
+
+        # Precio final
+        unit_price = round(base_price * kit_multiplier * multiplier, 2)
+        row.col_3 = str(unit_price)
+
+        # Total = cantidad * unit_price
+        try:
+            qty = float(row.col_2)
+        except:
+            qty = 1
+        row.col_4 = str(round(qty * unit_price, 2))
+
+
 
 
 
@@ -82,6 +93,7 @@ class ProformaModel:
         if row.type != "PRODUCT":
             return
         row.col_3 = str(price)
+        print("set_price", price)
         self._recalculate(row)
 
     # --------------------
@@ -105,11 +117,15 @@ class ProformaModel:
             return None
         return material.get("price")
 
-    def _infer_info_from_product(self, system_key: str):
+    def _infer_info_from_product(self, product_name: str):
         """
         Devuelve la información asociada al sistema de resina.
+        Solo si el producto pertenece a RESIN_SYSTEMS.
         """
-        info = get_product_info(system_key)
-        if info:
-            return info, ""
+        for system_key, data in RESIN_SYSTEMS.items():
+            if system_key in product_name.upper() or data["product_base"] in product_name.upper():
+                info = data.get("product_info")
+                if info:
+                    return info, ""
         return None, None
+

@@ -46,6 +46,7 @@ class ProformaState:
 
         # Herramientas
         self.include_tools: bool = True
+        self.cost_multiplier = 3.0
 
     # -------------------------
     # Cliente

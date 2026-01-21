@@ -17,7 +17,7 @@ def generate_proforma(
     system_key: str,
     work_type: str,
     area_m2: int,
-    multiplier: float = 1.0,
+    multiplier: float = 3.0,
     color: str = None,
     customer_name: str = None,
     customer_phone: str = None,
@@ -119,10 +119,14 @@ def generate_proforma(
                 # Rellenar el precio desde la BD usando el modelo
                 price = table_window.model.get_price_from_db(product_name)
                 if price is not None:
-                    row.col_3 = str(round(price * multiplier, 2))  # aplicamos multiplicador si quieres
-                    row.col_4 = str(round(amount * float(row.col_3), 2))
+                    kit_multiplier = float(kit_size)
+                    final_price = price * multiplier * kit_multiplier
+                    row.col_3 = str(round(final_price, 2))
+                    row.col_4 = str(round(amount * final_price, 2))
                 else:
                     row.col_3 = "not found"
+                    row.col_4 = ""
+
 
                 # Añadir fila al modelo temporal
                 rows.append(row)

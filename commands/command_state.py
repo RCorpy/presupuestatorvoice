@@ -314,11 +314,8 @@ class CommandState:
         if word == "SIGUIENTE":
             if len(self.product_matches) == 1:
                 product = self.product_matches[0]
-                model.set_product(self.active_row, product)
-                model.set_price(
-                    self.active_row,
-                    self.materials[product]["price"]
-                )
+                model.set_product(self.active_row, product, multiplier=self.state.multiplier_spin_value)
+
                 self.reset()
                 return f"Producto {product} confirmado"
             return f"{len(self.product_matches)} candidatos, sigue acotando"
