@@ -96,6 +96,13 @@ COLORS = [
     "AZUL",
     "AMARILLO",
     "BEIGE",
+    "ROJO FERRARI",
+    "NARANJA",
+    "OCRE",
+    "GRIS ANTRACITA",
+    "AZUL 5015",
+    "AZUL 5002",
+    "AZUL 5012",
 ]
 
 # =========================================================
