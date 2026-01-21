@@ -21,51 +21,41 @@ KIT_COMBINATIONS: Dict[int, Dict[int, int]] = {
 AVAILABLE_KITS = [24, 18, 12, 6]
 
 
-def select_kits(total_kg: int) -> Dict[int, int]:
+def select_kits(total_kg: float) -> Dict[int, int]:
     """
-    Devuelve un dict {kit_size: amount} para cubrir total_kg
+    Devuelve un dict {kit_size: amount} para cubrir total_kg.
+    Ajusta total_kg al múltiplo de 6 más cercano hacia arriba.
     """
-
     if total_kg <= 0:
         return {}
 
-    # Caso exacto predefinido
-    if total_kg in KIT_COMBINATIONS:
-        # limpiar posibles ceros
+    # 🔹 Redondear al múltiplo de 6 superior
+    rounded_total = int(((total_kg + 5) // 6) * 6)
+    print("rounded_total", rounded_total)
+
+    # 🔹 Caso exacto predefinido
+    if rounded_total in KIT_COMBINATIONS:
         return {
             size: qty
-            for size, qty in KIT_COMBINATIONS[total_kg].items()
+            for size, qty in KIT_COMBINATIONS[rounded_total].items()
             if qty > 0
         }
 
-    # Caso estándar: > 60 kg
+    # 🔹 Caso estándar: > 60 kg
     result: Dict[int, int] = {}
+    remaining = rounded_total
 
-    remaining = total_kg
+    for kit in AVAILABLE_KITS:
+        num_kits = remaining // kit
+        if num_kits > 0:
+            result[kit] = num_kits
+            remaining -= kit * num_kits
 
-    # tantos kits de 24 como se pueda
-    kits_24 = remaining // 24
-    if kits_24 > 0:
-        result[24] = kits_24
-        remaining -= kits_24 * 24
-
-    if remaining == 0:
-        return result
-
-    # resto en UN solo kit
-    remainder_kit = _closest_single_kit(remaining)
-    result[remainder_kit] = result.get(remainder_kit, 0) + 1
+    # 🔹 Si queda un resto, ponerlo en el kit más pequeño
+    if remaining > 0:
+        smallest_kit = min(AVAILABLE_KITS)
+        result[smallest_kit] = result.get(smallest_kit, 0) + 1
 
     return result
 
 
-def _closest_single_kit(kg: int) -> int:
-    """
-    Devuelve el tamaño de kit más cercano >= kg
-    """
-    for size in AVAILABLE_KITS:
-        if size >= kg:
-            return size
-
-    # si es mayor que 24 (caso raro, pero seguro)
-    return 24
