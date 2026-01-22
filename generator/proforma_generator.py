@@ -1,5 +1,3 @@
-# generator/proforma_generator.py
-
 from models.proforma_row import ProformaRow
 from generator.resin_config import (
     get_primer_product,
@@ -7,6 +5,7 @@ from generator.resin_config import (
     build_product_name,
     get_product_info,
     TOOLS,
+    COLOR_IGNORED_PRODUCTS,
 )
 from generator.kit_selector import select_kits
 
@@ -51,15 +50,26 @@ def generate_proforma(
     # -------------------------------------------------
     if "IMPRIMACION" in work_type:
         primer_product = get_primer_product(system_key)
-        kg_per_m2 = get_usage_kg_per_m2(system_key, "IMPRIMACION")
-        kg_total = area_m2 * kg_per_m2
 
-        proforma_state.add_product_to_phase(
-            phase_type="IMPRIMACION",
-            title="IMPRIMACION",
-            product_name=primer_product,
-            kg=kg_total
-        )
+        if primer_product is None:
+            # ⚠️ No aplica imprimación
+            print("IMPRIMACION NO APLICA")
+            proforma_state.add_product_to_phase(
+                phase_type="IMPRIMACION",
+                title="IMPRIMACION (NO APLICA)",
+                product_name="IMPRIMACION_NO_APLICA",
+                kg=0,
+            )
+        else:
+            kg_per_m2 = get_usage_kg_per_m2(system_key, "IMPRIMACION")
+            kg_total = area_m2 * kg_per_m2
+
+            proforma_state.add_product_to_phase(
+                phase_type="IMPRIMACION",
+                title="IMPRIMACION",
+                product_name=primer_product,
+                kg=kg_total,
+            )
 
     # -------------------------------------------------
     # 4️⃣ CAPAS
@@ -70,11 +80,15 @@ def generate_proforma(
         match = re.search(r"(\d+)", work_type)
         num_layers = int(match.group(1)) if match else 1
 
-        title = f"{num_layers} CAPA{'S' if num_layers > 1 else ''}"
-        if color:
-            title += f" {color}"
+        # 🔧 Ignorar color si el sistema lo indica
+        effective_color = None if system_key in COLOR_IGNORED_PRODUCTS else color
 
-        product_name = build_product_name(system_key, color)
+        title = f"{num_layers} CAPA{'S' if num_layers > 1 else ''}"
+        if effective_color:
+            title += f" {effective_color}"
+
+        product_name = build_product_name(system_key, effective_color)
+
         kg_per_m2 = get_usage_kg_per_m2(system_key, "CAPA")
         kg_total = area_m2 * kg_per_m2 * num_layers
 
@@ -82,7 +96,7 @@ def generate_proforma(
             phase_type="CAPAS",
             title=title,
             product_name=product_name,
-            kg=kg_total
+            kg=kg_total,
         )
 
     # -------------------------------------------------
@@ -100,38 +114,50 @@ def generate_proforma(
         rows.append(ProformaRow(type="TITLE", col_0=phase.title))
 
         for product_name, total_kg in phase.products.items():
-            kit_distribution = select_kits(total_kg)
 
-            for kit_size, amount in kit_distribution.items():
-                if amount <= 0:
-                    continue
-
-                # Crear la fila
-                row = ProformaRow(
-                    type="PRODUCT",
-                    col_0=f"{kit_size} kg",
-                    col_1=product_name,
-                    col_2=str(amount),
-                    col_3="",  # temporal, será reemplazado
-                    col_4="",  # temporal
+            # -----------------------------
+            # IMPRIMACIÓN NO APLICA
+            # -----------------------------
+            if product_name == "IMPRIMACION_NO_APLICA":
+                rows.append(
+                    ProformaRow(
+                        type="PRODUCT",
+                        col_0="",
+                        col_1="Imprimación no aplica",
+                        col_2="",
+                        col_3="NOT FOUND",
+                        col_4="",
+                    )
                 )
+            else:
+                kit_distribution = select_kits(total_kg)
 
-                # Rellenar el precio desde la BD usando el modelo
-                price = table_window.model.get_price_from_db(product_name)
-                if price is not None:
-                    kit_multiplier = float(kit_size)
-                    final_price = price * multiplier * kit_multiplier
-                    row.col_3 = str(round(final_price, 2))
-                    row.col_4 = str(round(amount * final_price, 2))
-                else:
-                    row.col_3 = "not found"
-                    row.col_4 = ""
+                for kit_size, amount in kit_distribution.items():
+                    if amount <= 0:
+                        continue
 
+                    row = ProformaRow(
+                        type="PRODUCT",
+                        col_0=f"{kit_size} kg",
+                        col_1=product_name,
+                        col_2=str(amount),
+                        col_3="",
+                        col_4="",
+                    )
 
-                # Añadir fila al modelo temporal
-                rows.append(row)
+                    price = table_window.model.get_price_from_db(product_name)
+                    if price is not None:
+                        kit_multiplier = float(kit_size)
+                        final_price = price * multiplier * kit_multiplier
+                        row.col_3 = str(round(final_price, 2))
+                        row.col_4 = str(round(amount * final_price, 2))
+                    else:
+                        row.col_3 = "not found"
+                        row.col_4 = ""
 
+                    rows.append(row)
 
+            # INFO de la fase
             info = get_product_info(system_key)
             if info:
                 rows.append(ProformaRow(type="INFO", col_0=info))
@@ -152,7 +178,7 @@ def generate_proforma(
                     col_1=tool_name,
                     col_2=str(amount),
                     col_3=str(price),
-                    col_4=str(amount * price)
+                    col_4=str(amount * price),
                 )
             )
 
