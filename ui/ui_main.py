@@ -10,6 +10,10 @@ from PySide6.QtCore import Qt
 from generator.proforma_generator import generate_proforma
 from generator.resin_config import RESIN_SYSTEMS, COLORS, get_cost_multiplier
 from state.proforma_state import ProformaState
+from db.materials_repository import load_materials
+from generator.resin_capabilities import get_valid_work_types
+from generator.resin_color_capabilities import get_available_colors
+
 
 
 # ------------------------------
@@ -36,6 +40,12 @@ class MainWindow(QWidget):
 
         self.table_window = table_window
         self.proforma_state = ProformaState()
+        self.materials = load_materials()
+        self.all_work_types = WORK_TYPES.copy()
+        self.all_colors = COLORS.copy()
+        
+
+
 
         layout = QHBoxLayout()
         layout.setAlignment(Qt.AlignLeft)
@@ -73,7 +83,7 @@ class MainWindow(QWidget):
         # ------------------------------
         layout.addWidget(QLabel("Trabajo:"))
         self.work_combo = QComboBox()
-        self.work_combo.addItems(WORK_TYPES)
+        self.work_combo.addItems(self.all_work_types)
         layout.addWidget(self.work_combo)
 
         # ------------------------------
@@ -90,7 +100,7 @@ class MainWindow(QWidget):
         # ------------------------------
         layout.addWidget(QLabel("Color:"))
         self.color_combo = QComboBox()
-        self.color_combo.addItems(COLORS)
+        self.color_combo.addItems(self.all_colors)
         layout.addWidget(self.color_combo)
 
         # ------------------------------
@@ -125,14 +135,20 @@ class MainWindow(QWidget):
     # -------------------------------------------------
 
     def on_resin_changed(self, _):
-        """
-        Ajusta el multiplicador por defecto según el sistema de resina.
-        El usuario puede modificarlo después manualmente.
-        """
         system_key = self.resin_combo.currentData()
+
+        # Multiplicador por defecto
         self.multiplier_spin.setValue(
             get_cost_multiplier(system_key)
         )
+
+        # Trabajo
+        self.update_work_types_for_resin()
+
+        # 🎨 Colores
+        self.update_colors_for_resin()
+
+
 
     # -------------------------------------------------
     # Acciones
@@ -176,3 +192,40 @@ class MainWindow(QWidget):
     def on_product_selected(self, item):
         multiplier = self.multiplier_spin.value()
         self.table_window.on_product_clicked(item, multiplier)
+
+    def update_work_types_for_resin(self):
+        system_key = self.resin_combo.currentData()
+
+        valid_work_types = get_valid_work_types(
+            system_key,
+            self.all_work_types
+        )
+
+        # Reconstruir combo
+        self.work_combo.blockSignals(True)
+        self.work_combo.clear()
+        self.work_combo.addItems(valid_work_types)
+        self.work_combo.setCurrentIndex(0)
+        self.work_combo.blockSignals(False)
+
+    def update_colors_for_resin(self):
+        system_key = self.resin_combo.currentData()
+
+        available_colors = get_available_colors(
+            system_key,
+            self.materials
+        )
+
+        self.color_combo.blockSignals(True)
+        self.color_combo.clear()
+
+        if not available_colors:
+            self.color_combo.addItem("SIN COLOR")
+            self.color_combo.setEnabled(False)
+        else:
+            self.color_combo.addItems(available_colors)
+            self.color_combo.setEnabled(True)
+            self.color_combo.setCurrentIndex(0)
+
+        self.color_combo.blockSignals(False)
+

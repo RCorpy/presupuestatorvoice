@@ -12,6 +12,15 @@
 # - información extra (fila INFO en UI)
 # =========================================================
 
+ENABLE_DB_COLOR_FILTER = False
+
+#COSTES DE ENVASE
+
+PACKAGING_COST_PER_PHASE = 6.5
+BOX_COST = 3.0
+BUCKET_COST = 3.5
+#FIN COSTES DE ENVASE
+
 RESIN_SYSTEMS = {
     "EPOXI_AM": {
         "label": "Epoxi AM",
