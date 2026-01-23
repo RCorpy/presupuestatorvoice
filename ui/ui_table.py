@@ -62,6 +62,14 @@ class ProformaTableWindow(QMainWindow):
         sidebar_layout.setSpacing(10)
 
         # --- Botones principales ---
+
+        self.new_proforma_btn = QPushButton("🆕")
+        self.new_proforma_btn.setFixedSize(40, 40)
+        self.new_proforma_btn.setToolTip("Nueva proforma")
+        self.new_proforma_btn.clicked.connect(self.new_proforma)
+        sidebar_layout.addWidget(self.new_proforma_btn, alignment=Qt.AlignHCenter)
+
+
         self.add_product_btn = QPushButton("➕")
         self.add_product_btn.setFixedSize(40, 40)
         self.add_product_btn.setToolTip("Añadir fila PRODUCT")
@@ -388,6 +396,7 @@ class ProformaTableWindow(QMainWindow):
             self._updating_ui = False
 
         # 🔹 Refrescar panel derecho
+        self.user_editing = False
         self.update_summary_panel()
 
 
@@ -659,6 +668,30 @@ class ProformaTableWindow(QMainWindow):
         area_m2 = self.proforma_state.area_m2
         self.summary_panel.update_summary(self.model, area_m2)
 
+    def new_proforma(self):
+        # 1️⃣ Reset del estado global
+        self.proforma_state.reset()
+
+        # 2️⃣ Reset del modelo
+        self._updating_ui = True
+
+        self.model.clear()
+        self.model.add_row(ProformaRow(type="PRODUCT"))
+
+        self.table.setRowCount(self.model.row_count())
+        self._init_table_items()
+        self.refresh_all_rows()
+
+        self._updating_ui = False
+
+        # 3️⃣ Refrescar panel derecho
+        self.summary_panel.update_summary(
+            self.model,
+            self.proforma_state.area_m2
+        )
+
+        self.status_label.setText("Nueva proforma creada")
+
 
 
 class UserEditDelegate(QStyledItemDelegate):
@@ -673,6 +706,7 @@ class UserEditDelegate(QStyledItemDelegate):
     def destroyEditor(self, editor, index):
         self.table.user_editing = False
         super().destroyEditor(editor, index)
+
 
 
 

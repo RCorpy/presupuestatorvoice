@@ -39,6 +39,10 @@ class ProformaModel:
         if 0 <= index < len(self.rows):
             self.rows[index] = new_row
 
+    def clear(self):
+        """Vacía completamente la proforma"""
+        self.rows.clear()
+
 
     # --------------------
     # Product helpers
