@@ -292,7 +292,7 @@ class ProformaTableWindow(QMainWindow):
             self.state.product_matches = list(self.materials.keys())
         else:
             self.state.mode = CommandMode.IDLE
-
+        self.user_editing = True
         self.highlight_active_row()
         self.highlight_active_cell()
         self.update_product_suggestions()
@@ -347,56 +347,50 @@ class ProformaTableWindow(QMainWindow):
                         self.table.setItem(r, c, QTableWidgetItem(""))
 
     def on_cell_changed(self, row, column):
+        print("on_cell_changed",self._updating_ui, self.user_editing)
         if self._updating_ui:
             return
         if not self.user_editing:
             return
+
         item = self.table.item(row, column)
         if not item:
             return
 
         text = item.text() or ""
         proforma_row = self.model.get_row(row)
-
-        # 🔒 Si el valor ya es el mismo, NO hacer nada
-        current = [
-            proforma_row.col_0,
-            proforma_row.col_1,
-            proforma_row.col_2,
-            proforma_row.col_3,
-            proforma_row.col_4,
-        ][column]
-
-        if text == current:
+        print("on_cell_change", text)
+        # 🔒 Evitar cambios innecesarios
+        if text == proforma_row.as_list()[column]:
             return
 
-        # ✅ UI → MODELO (única dirección permitida aquí)
+        # Mapear columna a kwargs
+        kwargs = {}
         if column == 0:
-            proforma_row.col_0 = text
+            kwargs['col_0'] = text
         elif column == 1:
-            proforma_row.col_1 = text
+            kwargs['col_1'] = text
         elif column == 2:
-            proforma_row.col_2 = text
+            kwargs['col_2'] = text
         elif column == 3:
-            proforma_row.col_3 = text
-        elif column == 4:
-            proforma_row.col_4 = text
+            kwargs['col_3'] = text
+        # col_4 se recalcula, no permitimos edición directa
 
-        # 🔢 Recalcular TOTAL solo si toca
-        if proforma_row.type == "PRODUCT" and column in (2, 3):
-            try:
-                qty = float(proforma_row.col_2)
-                price = float(proforma_row.col_3)
-                proforma_row.col_4 = str(round(qty * price, 2))
-            except:
-                proforma_row.col_4 = ""
-        if proforma_row.type == "PRODUCT" and column in (2, 3):
+        # 🔹 Actualizar la fila usando el método del modelo
+        self.model.update_row_from_ui(row, **kwargs)
+
+        # 🔹 Actualizar la UI del TOTAL
+        if proforma_row.type == "PRODUCT":
             self._updating_ui = True
             total_item = self.table.item(row, 4)
             if total_item:
                 total_item.setText(proforma_row.col_4)
             self._updating_ui = False
+
+        # 🔹 Refrescar panel derecho
         self.update_summary_panel()
+
+
 
     # ======================================================
     # Comandos (texto / voz)

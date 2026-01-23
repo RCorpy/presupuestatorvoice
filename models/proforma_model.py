@@ -208,3 +208,32 @@ class ProformaModel:
         if area_m2 <= 0:
             return 0.0
         return round((self.get_total_kg() * 1000) / area_m2, 1)
+
+    def update_row_from_ui(self, row_index: int, col_0=None, col_1=None, col_2=None, col_3=None):
+        """
+        Actualiza una fila del modelo con los datos que vienen de la UI
+        y recalcula el TOTAL y otros valores derivados.
+        """
+        
+        row = self.get_row(row_index)
+        print("1",row)
+        if not row or row.type != "PRODUCT":
+            return
+
+        if col_0 is not None:
+            row.col_0 = col_0
+        if col_1 is not None:
+            row.col_1 = col_1
+        if col_2 is not None:
+            row.col_2 = str(col_2)
+        if col_3 is not None:
+            row.col_3 = str(col_3)
+
+        # 🔹 Recalcular total
+        try:
+            qty = float(row.col_2) if row.col_2 else 1
+            price = float(row.col_3) if row.col_3 else 0
+            row.col_4 = str(round(qty * price, 2))
+            print("2",row)
+        except ValueError:
+            row.col_4 = "0"
