@@ -13,7 +13,7 @@ from state.proforma_state import ProformaState
 from db.materials_repository import load_materials
 from generator.resin_capabilities import get_valid_work_types
 from generator.resin_color_capabilities import get_available_colors
-
+from ui.ui_summary_panel import SummaryPanel
 
 
 # ------------------------------
@@ -35,11 +35,11 @@ class MainWindow(QWidget):
     Controla la generación y acumulación de productos en la proforma.
     """
 
-    def __init__(self, table_window):
+    def __init__(self, table_window, proforma_state):
         super().__init__()
 
         self.table_window = table_window
-        self.proforma_state = ProformaState()
+        self.proforma_state = proforma_state
         self.materials = load_materials()
         self.all_work_types = WORK_TYPES.copy()
         self.all_colors = COLORS.copy()
@@ -94,6 +94,8 @@ class MainWindow(QWidget):
         self.area_spin.setRange(1, 5000)
         self.area_spin.setValue(10)
         layout.addWidget(self.area_spin)
+        self.area_spin.valueChanged.connect(self.on_area_changed)
+
 
         # ------------------------------
         # Color
@@ -155,6 +157,7 @@ class MainWindow(QWidget):
     # -------------------------------------------------
 
     def _collect_form_data(self):
+        self.proforma_state.area_m2 = self.area_spin.value()
         return dict(
             system_key=self.resin_combo.currentData(),
             work_type=self.work_combo.currentText(),
@@ -172,6 +175,7 @@ class MainWindow(QWidget):
 
         # 🔥 Reset REAL del estado acumulado
         self.proforma_state.reset()
+        self.proforma_state.area_m2 = data["area_m2"]
 
         generate_proforma(
             table_window=self.table_window,
@@ -228,4 +232,8 @@ class MainWindow(QWidget):
             self.color_combo.setCurrentIndex(0)
 
         self.color_combo.blockSignals(False)
+
+    def on_area_changed(self, value):
+        self.proforma_state.area_m2 = value
+        self.table_window.update_summary_panel()
 

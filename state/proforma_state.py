@@ -15,7 +15,8 @@ class ProformaPhase:
         self.phase_type: str = phase_type  # "IMPRIMACIÓN" | "CAPAS"
         self.title: str = title            # Texto del TITLE
         self.products: Dict[str, float] = defaultdict(float)
-        # products[product_name] = total_kg
+        self.area_m2 = 0
+        
 
     def add_product(self, product_name: str, kg: float):
         if kg <= 0:
@@ -32,7 +33,7 @@ class ProformaState:
 
     def __init__(self):
         self.reset()
-
+        self.area_m2 = 0
     # -------------------------
     # Estado base
     # -------------------------

@@ -306,3 +306,6 @@ def build_product_name(system_key: str, color: str | None) -> str:
     # 3️⃣ Caso normal: producto + color
     return f"{base} {color}"
 
+def get_packaging_cost_for_phase(is_first_kit: bool) -> float:
+    return PACKAGING_COST_PER_PHASE if is_first_kit else 0.0
+

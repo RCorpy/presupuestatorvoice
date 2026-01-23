@@ -8,6 +8,8 @@ from generator.resin_config import (
     COLOR_IGNORED_PRODUCTS,
 )
 from generator.kit_selector import select_kits
+from generator.resin_config import get_packaging_cost_for_phase
+
 
 
 def generate_proforma(
@@ -39,6 +41,7 @@ def generate_proforma(
 
     table_window.sync_table_rows()
     table_window.refresh_all_rows()
+    table_window.update_summary_panel()
 
     # -------------------------------------------------
     # 2️⃣ Datos de cliente
@@ -131,6 +134,7 @@ def generate_proforma(
                 )
             else:
                 kit_distribution = select_kits(total_kg)
+                is_first_kit = True
 
                 for kit_size, amount in kit_distribution.items():
                     if amount <= 0:
@@ -148,9 +152,14 @@ def generate_proforma(
                     price = table_window.model.get_price_from_db(product_name)
                     if price is not None:
                         kit_multiplier = float(kit_size)
-                        final_price = price * multiplier * kit_multiplier
+                        base_price = price * multiplier * kit_multiplier
+                        packaging_cost = get_packaging_cost_for_phase(is_first_kit)
+
+                        final_price = base_price + packaging_cost
+                        is_first_kit = False
                         row.col_3 = str(round(final_price, 2))
                         row.col_4 = str(round(amount * final_price, 2))
+
                     else:
                         row.col_3 = "not found"
                         row.col_4 = ""
@@ -191,5 +200,6 @@ def generate_proforma(
     table_window.sync_table_rows()
     table_window.refresh_all_rows()
     table_window.highlight_active_row()
+    table_window.update_summary_panel()
 
     return rows

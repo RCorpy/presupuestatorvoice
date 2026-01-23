@@ -19,22 +19,25 @@ from db.materials_repository import load_materials
 
 from models.proforma_model import ProformaModel
 from models.proforma_row import ProformaRow
+from ui.ui_summary_panel import SummaryPanel
+
 
 
 class ProformaTableWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, proforma_state):
         super().__init__()
         self.setWindowTitle("PresupuestatorVoice")
         self.resize(1100, 550)
         self._updating_ui = False
         self.user_editing = False
+        
 
 
         # --------------------------------------------------
         # Datos / estado
         # --------------------------------------------------
         self.materials = load_materials()
-
+        self.proforma_state = proforma_state
         self.state = CommandState(self.materials)
         self.model = ProformaModel(state=self.state)
 
@@ -148,15 +151,24 @@ class ProformaTableWindow(QMainWindow):
         self.table.cellClicked.connect(self.on_cell_clicked)
 
         # --------------------------------------------------
-        # Lista de productos
+        # Panel derecho (Resumen + Buscador)
         # --------------------------------------------------
+        self.right_panel = QWidget()
+        self.right_panel.setMaximumWidth(350)
+
+        right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.summary_panel = SummaryPanel()
         self.product_list = QListWidget()
         self.product_list.setMaximumWidth(350)
-        self.table.itemSelectionChanged.connect(self._on_selection_changed)
-        self.table.setItemDelegate(UserEditDelegate(self))
 
+        right_layout.addWidget(self.summary_panel)
+        right_layout.addWidget(self.product_list)
 
         self.product_list.hide()
+        self.summary_panel.show()
+
 
         # --------------------------------------------------
         # Input comandos
@@ -183,7 +195,7 @@ class ProformaTableWindow(QMainWindow):
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.sidebar)
         main_layout.addLayout(table_layout)
-        main_layout.addWidget(self.product_list)
+        main_layout.addWidget(self.right_panel)
 
         container = QWidget()
         container.setLayout(main_layout)
@@ -384,7 +396,7 @@ class ProformaTableWindow(QMainWindow):
             if total_item:
                 total_item.setText(proforma_row.col_4)
             self._updating_ui = False
-
+        self.update_summary_panel()
 
     # ======================================================
     # Comandos (texto / voz)
@@ -461,13 +473,18 @@ class ProformaTableWindow(QMainWindow):
 
     def update_product_suggestions(self):
         self.product_list.clear()
+
         if self.state.mode != CommandMode.PRODUCT:
             self.product_list.hide()
+            self.summary_panel.show()
             return
 
+        self.summary_panel.hide()
         self.product_list.show()
+
         for product in self.state.product_matches[:50]:
             self.product_list.addItem(product)
+
 
 
 
@@ -480,12 +497,13 @@ class ProformaTableWindow(QMainWindow):
         self.state.reset()
         self.product_list.clear()
         self.product_list.hide()
+        self.summary_panel.show()
 
         # Sincronizar tabla
         self.sync_table_rows()
         self.refresh_all_rows()
         self.highlight_active_row()
-
+        self.update_summary_panel()
 
 
 
@@ -564,6 +582,8 @@ class ProformaTableWindow(QMainWindow):
         self._init_table_items()           # asegura que todos los QTableWidgetItem existen
         self.refresh_all_rows()
         self.highlight_active_row()
+        self.update_summary_panel()
+
 
 
         
@@ -641,6 +661,12 @@ class ProformaTableWindow(QMainWindow):
         self.table.blockSignals(False)
         self._updating_ui = False
 
+    def update_summary_panel(self):
+        area_m2 = self.proforma_state.area_m2
+        self.summary_panel.update_summary(self.model, area_m2)
+
+
+
 class UserEditDelegate(QStyledItemDelegate):
     def __init__(self, table):
         super().__init__(table)
@@ -653,6 +679,7 @@ class UserEditDelegate(QStyledItemDelegate):
     def destroyEditor(self, editor, index):
         self.table.user_editing = False
         super().destroyEditor(editor, index)
+
 
 
 

@@ -3,7 +3,7 @@ from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 from copy import deepcopy
 from models.row_factory import info_row
-from generator.resin_config import get_product_info, RESIN_SYSTEMS
+from generator.resin_config import get_product_info, RESIN_SYSTEMS, PACKAGING_COST_PER_PHASE
 import re
 
 
@@ -63,9 +63,9 @@ class ProformaModel:
         match = re.search(r"\b(6|12|18|24)\b", col0_lower)
         if match:
             kit_multiplier = int(match.group(1))
-
+        packaging_price = kit_multiplier * PACKAGING_COST_PER_PHASE/6 #lo hacemos para que sea por kg
         # Precio final
-        unit_price = round(base_price * kit_multiplier * multiplier, 2)
+        unit_price = round((base_price * kit_multiplier * multiplier) + packaging_price, 2) 
         row.col_3 = str(unit_price)
 
         # Total = cantidad * unit_price
@@ -129,3 +129,82 @@ class ProformaModel:
                     return info, ""
         return None, None
 
+    def get_total_price(self) -> float:
+        total = 0.0
+        for row in self.rows:
+            if row.type == "PRODUCT":
+                try:
+                    qty = float(row.col_2) if row.col_2 else 0
+                    price = float(row.col_3) if row.col_3 else 0
+                    total += qty * price
+                except ValueError:
+                    pass
+        return round(total, 2)
+
+    def get_total_kg(self) -> float:
+        total_kg = 0.0
+        for row in self.rows:
+            if row.type == "PRODUCT":
+                try:
+                    kit_size = float(row.col_0.replace("kg", "").strip())
+                    qty = float(row.col_2)
+                    total_kg += kit_size * qty
+                except:
+                    pass
+        return round(total_kg, 2)
+
+    def get_price_per_m2(self, area_m2: float) -> float:
+        if area_m2 <= 0:
+            return 0.0
+        return round(self.get_total_price() / area_m2, 2)
+
+    def get_kg_per_m2(self, area_m2: float) -> float:
+        if area_m2 <= 0:
+            return 0.0
+        return round(self.get_total_kg() / area_m2, 3)
+    
+    def get_kg_by_phase(self):
+        kg_imprimacion = 0.0
+        kg_capas = 0.0
+        current_phase = None
+
+        for row in self.rows:
+            if row.type == "TITLE":
+                title = row.col_0.upper()
+                if "IMPRIMACION" in title:
+                    current_phase = "IMPRIMACION"
+                elif "CAPA" in title:
+                    current_phase = "CAPAS"
+                else:
+                    current_phase = None
+
+            elif row.type == "PRODUCT" and current_phase:
+                try:
+                    kit_size = float(row.col_0.replace("kg", "").strip())
+                    qty = float(row.col_2)
+                    kg = kit_size * qty
+
+                    if current_phase == "IMPRIMACION":
+                        kg_imprimacion += kg
+                    elif current_phase == "CAPAS":
+                        kg_capas += kg
+                except:
+                    pass
+
+        return round(kg_imprimacion, 2), round(kg_capas, 2)
+
+    def get_g_m2_by_phase(self, area_m2: float):
+        if area_m2 <= 0:
+            return 0, 0
+
+        kg_imp, kg_cap = self.get_kg_by_phase()
+
+        g_m2_imp = round((kg_imp * 1000) / area_m2, 1)
+        g_m2_cap = round((kg_cap * 1000) / area_m2, 1)
+
+        return g_m2_imp, g_m2_cap
+
+    def get_total_g_m2(self, area_m2: float):
+        if area_m2 <= 0:
+            return 0.0
+        return round((self.get_total_kg() * 1000) / area_m2, 1)
