@@ -79,6 +79,16 @@ class ProformaModel:
             qty = 1
         row.col_4 = str(round(qty * unit_price, 2))
 
+        info, _ = self._infer_info_from_product(product_name)
+
+        if info:
+            # ¿ya hay una fila debajo?
+            next_index = row_index + 1
+
+            if next_index >= len(self.rows) or self.rows[next_index].type != "INFO":
+                info_row = ProformaRow(type="INFO")
+                info_row.col_1 = info
+                self.insert_row(next_index, info_row)
 
 
 
@@ -110,7 +120,7 @@ class ProformaModel:
         try:
             qty = float(row.col_2)
             price = float(row.col_3)
-            row.col_4 = str(qty * price)
+            row.col_4 =  str(round(qty * price, 2))
         except (ValueError, TypeError):
             row.col_4 = ""
 

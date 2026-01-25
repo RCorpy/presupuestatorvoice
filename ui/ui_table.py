@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QLabel, QPushButton, QListWidget, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 
 from voice.voice_listener import VoiceListener
 from voice.voice_normalizer import normalize_command
@@ -63,9 +63,12 @@ class ProformaTableWindow(QMainWindow):
 
         # --- Botones principales ---
 
-        self.new_proforma_btn = QPushButton("🆕")
-        self.new_proforma_btn.setFixedSize(40, 40)
+        self.new_proforma_btn = QPushButton("🔄")
+        self.new_proforma_btn.setFixedSize(55, 55)
         self.new_proforma_btn.setToolTip("Nueva proforma")
+        font = QFont()
+        font.setPointSize(24)  # prueba entre 24 y 32
+        self.new_proforma_btn.setFont(font)
         self.new_proforma_btn.clicked.connect(self.new_proforma)
         sidebar_layout.addWidget(self.new_proforma_btn, alignment=Qt.AlignHCenter)
 
@@ -355,7 +358,6 @@ class ProformaTableWindow(QMainWindow):
                         self.table.setItem(r, c, QTableWidgetItem(""))
 
     def on_cell_changed(self, row, column):
-        print("on_cell_changed",self._updating_ui, self.user_editing)
         if self._updating_ui:
             return
         if not self.user_editing:
@@ -367,7 +369,6 @@ class ProformaTableWindow(QMainWindow):
 
         text = item.text() or ""
         proforma_row = self.model.get_row(row)
-        print("on_cell_change", text)
         # 🔒 Evitar cambios innecesarios
         if text == proforma_row.as_list()[column]:
             return
@@ -493,7 +494,6 @@ class ProformaTableWindow(QMainWindow):
 
     def on_product_clicked(self, item, multiplier: float):
         product = item.text()
-        print("multiplier", multiplier)
         self.model.set_product(self.state.active_row, product, multiplier=multiplier)
 
         # Resetear estado

@@ -67,6 +67,7 @@ class CommandState:
         self.active_row = 0
         self.mode = CommandMode.IDLE
         self.number_buffer = ""
+        self.state={"multiplier_spin_value":3}
 
         # Producto
         self.product_buffer: list[str] = []
@@ -309,12 +310,13 @@ class CommandState:
 
     def _handle_product_word(self, word: str, model):
         word = word.upper()
-
+        print(self.product_matches)
         # Confirmar producto
         if word == "SIGUIENTE":
             if len(self.product_matches) == 1:
                 product = self.product_matches[0]
-                model.set_product(self.active_row, product, multiplier=self.state.multiplier_spin_value)
+                print(self.state)
+                model.set_product(self.active_row, product, multiplier=self.state["multiplier_spin_value"])
 
                 self.reset()
                 return f"Producto {product} confirmado"
