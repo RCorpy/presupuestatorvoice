@@ -310,7 +310,6 @@ class CommandState:
 
     def _handle_product_word(self, word: str, model):
         word = word.upper()
-        print(self.product_matches)
         # Confirmar producto
         if word == "SIGUIENTE":
             if len(self.product_matches) == 1:

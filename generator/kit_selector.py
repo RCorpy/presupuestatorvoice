@@ -31,7 +31,6 @@ def select_kits(total_kg: float) -> Dict[int, int]:
 
     # 🔹 Redondear al múltiplo de 6 superior
     rounded_total = int(((total_kg + 5) // 6) * 6)
-    print("rounded_total", rounded_total)
 
     # 🔹 Caso exacto predefinido
     if rounded_total in KIT_COMBINATIONS:
