@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QLabel, QPushButton, QListWidget, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor
 
 from voice.voice_listener import VoiceListener
 from voice.voice_normalizer import normalize_command
@@ -63,12 +63,9 @@ class ProformaTableWindow(QMainWindow):
 
         # --- Botones principales ---
 
-        self.new_proforma_btn = QPushButton("🔄")
-        self.new_proforma_btn.setFixedSize(55, 55)
+        self.new_proforma_btn = QPushButton("🆕")
+        self.new_proforma_btn.setFixedSize(40, 40)
         self.new_proforma_btn.setToolTip("Nueva proforma")
-        font = QFont()
-        font.setPointSize(24)  # prueba entre 24 y 32
-        self.new_proforma_btn.setFont(font)
         self.new_proforma_btn.clicked.connect(self.new_proforma)
         sidebar_layout.addWidget(self.new_proforma_btn, alignment=Qt.AlignHCenter)
 

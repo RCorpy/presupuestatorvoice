@@ -19,11 +19,11 @@ class ProformaModel:
 
     def add_row(self, row: ProformaRow):
         # 🔹 Siempre añadir una copia independiente
-        self.rows.append(deepcopy(row))
+        self.rows.append(row)
 
     def insert_row(self, index: int, row: ProformaRow):
         # 🔹 Siempre insertar una copia independiente
-        self.rows.insert(index, deepcopy(row))
+        self.rows.insert(index, row)
 
     def remove_row(self, index: int):
         if 0 <= index < len(self.rows):
@@ -84,14 +84,34 @@ class ProformaModel:
         if info:
             next_index = row_index + 1
 
+            # Caso 1: fila INFO ya existe debajo
             if next_index < len(self.rows) and self.rows[next_index].type == "INFO":
-                # Ya existe: solo escribir si está vacía
                 if not self.rows[next_index].col_0:
                     self.rows[next_index].col_0 = info
+                print("caso 1")
+
+            # Caso último índice → primero añadir fila PRODUCT temporal AQUI DA ERROR YA QUE NO ESCRIBE INFO
+            elif next_index >= len(self.rows):
+                temp_product = ProformaRow(type="PRODUCT")  # fila temporal para “no ser la última”
+                self.rows.append(temp_product)
+                print("fila PRODUCT temporal añadida", info)
+
+                # Ahora crear fila INFO debajo
+                info_row = ProformaRow(type="INFO")
+                info_row.col_0 = info
+                self.insert_row(next_index, info_row)
+                self.rows[next_index].col_0 = info
+                print("caso último índice: INFO creada")
+
+            # Caso siguiente fila no es INFO → insertar antes de ella
             else:
                 info_row = ProformaRow(type="INFO")
                 info_row.col_0 = info
                 self.insert_row(next_index, info_row)
+                print("caso 2 (inserción en medio)")
+
+
+
 
 
 
@@ -232,10 +252,14 @@ class ProformaModel:
         Actualiza una fila del modelo con los datos que vienen de la UI
         y recalcula el TOTAL y otros valores derivados.
         """
-        
         row = self.get_row(row_index)
-        print("1",row)
-        if not row or row.type != "PRODUCT":
+
+        if not row:
+            return
+
+        if row.type == "INFO":
+            if col_0 is not None:
+                row.col_0 = col_0
             return
 
         if col_0 is not None:
@@ -252,6 +276,5 @@ class ProformaModel:
             qty = float(row.col_2) if row.col_2 else 1
             price = float(row.col_3) if row.col_3 else 0
             row.col_4 = str(round(qty * price, 2))
-            print("2",row)
         except ValueError:
             row.col_4 = "0"

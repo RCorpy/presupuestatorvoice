@@ -314,7 +314,7 @@ class CommandState:
         if word == "SIGUIENTE":
             if len(self.product_matches) == 1:
                 product = self.product_matches[0]
-                print(self.state)
+
                 model.set_product(self.active_row, product, multiplier=self.state["multiplier_spin_value"])
 
                 self.reset()
