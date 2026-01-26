@@ -119,7 +119,7 @@ class MainWindow(QWidget):
         # ------------------------------
         # Botones
         # ------------------------------
-        self.new_btn = QPushButton("🔄 Nueva proforma")
+        self.new_btn = QPushButton("🆕 Nueva proforma")
         self.new_btn.clicked.connect(self.generate_new_proforma)
         layout.addWidget(self.new_btn)
 

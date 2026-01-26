@@ -82,13 +82,17 @@ class ProformaModel:
         info, _ = self._infer_info_from_product(product_name)
 
         if info:
-            # ¿ya hay una fila debajo?
             next_index = row_index + 1
 
-            if next_index >= len(self.rows) or self.rows[next_index].type != "INFO":
+            if next_index < len(self.rows) and self.rows[next_index].type == "INFO":
+                # Ya existe: solo escribir si está vacía
+                if not self.rows[next_index].col_0:
+                    self.rows[next_index].col_0 = info
+            else:
                 info_row = ProformaRow(type="INFO")
-                info_row.col_1 = info
+                info_row.col_0 = info
                 self.insert_row(next_index, info_row)
+
 
 
 
