@@ -13,7 +13,8 @@ from state.proforma_state import ProformaState
 from db.materials_repository import load_materials
 from generator.resin_capabilities import get_valid_work_types
 from generator.resin_color_capabilities import get_available_colors
-from ui.ui_summary_panel import SummaryPanel
+from ui.ui_save_proforma_popup import SaveProformaPopup
+
 
 
 # ------------------------------
@@ -132,6 +133,12 @@ class MainWindow(QWidget):
         # Supongamos que tienes algo como esto en MainWindow
         self.table_window.product_list.itemClicked.connect(self.on_product_selected)
 
+        self.save_btn = QPushButton("💾 Guardar proforma")
+        self.save_btn.clicked.connect(self.open_save_proforma_popup)
+        layout.addWidget(self.save_btn)
+
+
+
     # -------------------------------------------------
     # Eventos
     # -------------------------------------------------
@@ -236,4 +243,13 @@ class MainWindow(QWidget):
     def on_area_changed(self, value):
         self.proforma_state.area_m2 = value
         self.table_window.update_summary_panel()
+
+    def open_save_proforma_popup(self):
+        
+        popup = SaveProformaPopup(
+            parent=self,
+            proforma_state=self.proforma_state,
+            ui_data=self._collect_form_data()
+        )
+        popup.exec()
 
