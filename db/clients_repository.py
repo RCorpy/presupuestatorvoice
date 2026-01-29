@@ -69,11 +69,14 @@ def get_matches(phone: str = "", name: str = ""):
 # -------------------------------------------------
 
 # returns: "created" | "updated" | "unchanged"
-def create_or_update_client(data: dict) -> str:
+def create_or_update_client(data: dict) -> int:
+    """
+    Crea o actualiza un cliente y devuelve siempre su client_id
+    """
     conn = _get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM clients WHERE phone = ?", (data["phone"],))
+    cur.execute("SELECT id, name, email, cif, address, cp, city, province FROM clients WHERE phone = ?", (data["phone"],))
     row = cur.fetchone()
 
     if row is None:
@@ -93,41 +96,41 @@ def create_or_update_client(data: dict) -> str:
                 data["province"],
             )
         )
+        client_id = cur.lastrowid
         conn.commit()
         conn.close()
-        return "created"
+        return client_id
 
     # cliente existe → comprobamos cambios
-    columns = ["name", "phone", "email", "cif", "address", "cp", "city", "province"]
+    client_id = row[0]
+    columns = ["name", "email", "cif", "address", "cp", "city", "province"]
     existing = dict(zip(columns, row[1:]))
 
     changed = any(existing[k] != data[k] for k in columns)
 
-    if not changed:
-        conn.close()
-        return "unchanged"
-
-    cur.execute(
-        """
-        UPDATE clients
-        SET name=?, email=?, cif=?, address=?, cp=?, city=?, province=?
-        WHERE phone=?
-        """,
-        (
-            data["name"],
-            data["email"],
-            data["cif"],
-            data["address"],
-            data["cp"],
-            data["city"],
-            data["province"],
-            data["phone"],
+    if changed:
+        cur.execute(
+            """
+            UPDATE clients
+            SET name=?, email=?, cif=?, address=?, cp=?, city=?, province=?
+            WHERE id=?
+            """,
+            (
+                data["name"],
+                data["email"],
+                data["cif"],
+                data["address"],
+                data["cp"],
+                data["city"],
+                data["province"],
+                client_id
+            )
         )
-    )
+        conn.commit()
 
-    conn.commit()
     conn.close()
-    return "updated"
+    return client_id
+
 
 
 

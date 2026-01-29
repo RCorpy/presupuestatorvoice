@@ -4,10 +4,14 @@ from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from state.proforma_state import ProformaState
 from ui.ui_table import ProformaTableWindow
 from ui.ui_main import MainWindow
+from PySide6.QtGui import QFont
 
 def main():
+    base_font = QFont()
+    base_font.setPointSize(10)
+    
     app = QApplication(sys.argv)
-
+    app.setFont(base_font)
     proforma_state = ProformaState()
 
     # 🟢 Crear la ventana principal de la tabla

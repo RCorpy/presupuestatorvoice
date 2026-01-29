@@ -7,13 +7,13 @@ from PySide6.QtCore import QDate
 from PySide6.QtGui import QFont
 
 from db.clients_repository import get_matches, create_or_update_client, client_exists
-
+from db.proformas_repository import create_proforma
 
 
 
 class SaveProformaPopup(QDialog):
 
-    def __init__(self, parent, proforma_state, ui_data):
+    def __init__(self, parent, proforma_model, ui_data):
         super().__init__(parent)
 
         base_font = QFont()
@@ -21,7 +21,7 @@ class SaveProformaPopup(QDialog):
         self.setFont(base_font)
 
 
-        self.proforma_state = proforma_state
+        self.proforma_model = proforma_model
         self.ui_data = ui_data
 
         self.setWindowTitle("Guardar proforma")
@@ -233,9 +233,21 @@ class SaveProformaPopup(QDialog):
         self.province_input.setText(client.get("province", ""))
 
     def on_save(self):
-        data = {
-            "name": self.name_input.text().strip(),
-            "phone": self.phone_input.text().strip(),
+        name = self.name_input.text().strip()
+        phone = self.phone_input.text().strip()
+
+        if not name or not phone:
+            QMessageBox.warning(
+                self,
+                "Datos incompletos",
+                "Nombre y teléfono son obligatorios."
+            )
+            return
+
+        # -------- CLIENTE --------
+        client_data = {
+            "name": name,
+            "phone": phone,
             "email": self.email_input.text().strip(),
             "cif": self.cif_input.text().strip(),
             "address": self.address_input.text().strip(),
@@ -244,22 +256,42 @@ class SaveProformaPopup(QDialog):
             "province": self.province_input.text().strip(),
         }
 
-        result = create_or_update_client(data)
+        client_id = create_or_update_client(client_data)
 
-        messages = []
+        # -------- ENVÍO --------
+        shipping_data = {
+            "address": self.ship_address.text().strip(),
+            "cp": self.ship_cp.text().strip(),
+            "city": self.ship_city.text().strip(),
+            "province": self.ship_province.text().strip(),
+            "contact": self.ship_contact.text().strip(),
+            "phone": self.ship_phone.text().strip(),
+            "notes": self.ship_notes.toPlainText().strip(),
+        }
 
-        if result == "created":
-            messages.append("Cliente creado correctamente.")
-        elif result == "updated":
-            messages.append("Cliente actualizado correctamente.")
+        if not any(shipping_data.values()):
+            shipping_data = None
 
-        messages.append("Proforma guardada correctamente.")
+        # -------- PROFORMA --------
+        from db.proformas_repository import create_proforma
+
+        proforma_id = create_proforma(
+            client_id=client_id,
+            area_m2=self.ui_data["area_m2"],
+            main_color=self.ui_data["color"],
+            discount_percent=self.ui_data.get("discount_percent", 0),
+            shipping_cost=self.ui_data.get("shipping_cost", 0),
+            table_rows=self.proforma_model.rows,  # 👈 AQUÍ ESTÁ LA VERDAD
+            shipping_data=shipping_data,
+            notes=None
+        )
 
         QMessageBox.information(
             self,
             "Guardado",
-            "\n".join(messages)
+            f"Proforma guardada correctamente (ID {proforma_id})"
         )
 
         self.accept()
+
 

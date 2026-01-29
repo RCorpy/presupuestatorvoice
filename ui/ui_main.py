@@ -14,6 +14,8 @@ from db.materials_repository import load_materials
 from generator.resin_capabilities import get_valid_work_types
 from generator.resin_color_capabilities import get_available_colors
 from ui.ui_save_proforma_popup import SaveProformaPopup
+from models.proforma_model import ProformaModel
+
 
 
 
@@ -41,6 +43,7 @@ class MainWindow(QWidget):
 
         self.table_window = table_window
         self.proforma_state = proforma_state
+        self.proforma_model = ProformaModel(state=self.proforma_state)
         self.materials = load_materials()
         self.all_work_types = WORK_TYPES.copy()
         self.all_colors = COLORS.copy()
@@ -120,7 +123,7 @@ class MainWindow(QWidget):
         # ------------------------------
         # Botones
         # ------------------------------
-        self.new_btn = QPushButton("🆕 Nueva proforma")
+        self.new_btn = QPushButton("⚙️ Generar proforma")
         self.new_btn.clicked.connect(self.generate_new_proforma)
         layout.addWidget(self.new_btn)
 
@@ -248,7 +251,7 @@ class MainWindow(QWidget):
         
         popup = SaveProformaPopup(
             parent=self,
-            proforma_state=self.proforma_state,
+            proforma_model=self.proforma_model,
             ui_data=self._collect_form_data()
         )
         popup.exec()
