@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import List, Optional
 
-from state.proforma_row import ProformaRow
+from models.proforma_row import ProformaRow
 
 
 DB_PATH = "database.db"
@@ -88,7 +88,9 @@ def create_proforma(
     cur = conn.cursor()
 
     created_at = datetime.now().isoformat()
+    #print("table_rows", table_rows)
     rows_json = _serialize_rows(table_rows)
+    #print("rows_json", rows_json)
     shipping_json = json.dumps(shipping_data, ensure_ascii=False) if shipping_data else None
 
     cur.execute("""
@@ -142,7 +144,7 @@ def load_proforma_rows(proforma_id: int) -> List[ProformaRow]:
 
     if not row or not row[0]:
         return []
-
+    #print(row[0])
     return _deserialize_rows(row[0])
 
 
@@ -167,10 +169,14 @@ def get_proformas_for_client(client_id: int):
 
 def search_proformas(query: str):
     """
-    Búsqueda ligera por nombre o teléfono del cliente
+    Búsqueda ligera por nombre o teléfono del cliente.
+    Funciona incluso si la tabla clients está en otro archivo.
     """
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+
+    # Adjuntamos la base de datos externa con clientes
+    cur.execute("ATTACH DATABASE 'materials.db' AS clients_db")
 
     cur.execute("""
         SELECT
@@ -181,12 +187,40 @@ def search_proformas(query: str):
             p.main_color,
             p.created_at
         FROM proformas p
-        JOIN clients c ON c.id = p.client_id
+        JOIN clients_db.clients c ON c.id = p.client_id
         WHERE c.name LIKE ? OR c.phone LIKE ?
         ORDER BY p.created_at DESC
     """, (f"%{query}%", f"%{query}%"))
 
     rows = cur.fetchall()
+
+    # Desconectamos la DB externa
+    cur.execute("DETACH DATABASE clients_db")
     conn.close()
 
     return rows
+
+def get_proforma_preview(proforma_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("ATTACH DATABASE 'materials.db' AS clients_db")
+
+    cur.execute("""
+        SELECT
+            c.name,
+            c.phone,
+            p.area_m2,
+            p.main_color,
+            p.created_at
+        FROM proformas p
+        JOIN clients_db.clients c ON c.id = p.client_id
+        WHERE p.id = ?
+    """, (proforma_id,))
+
+    row = cur.fetchone()
+
+    cur.execute("DETACH DATABASE clients_db")
+    conn.close()
+
+    return row

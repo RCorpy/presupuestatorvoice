@@ -689,6 +689,55 @@ class ProformaTableWindow(QMainWindow):
 
         self.status_label.setText("Nueva proforma creada")
 
+    def reload_table(self, rows):
+        """
+        Recarga completamente la tabla a partir de una lista de ProformaRow
+        (usado al cargar una proforma desde DB)
+        """
+        self._updating_ui = True
+        self.user_editing = False
+
+        # 1️⃣ Resetear modelo
+        self.model.clear()
+
+        # 2️⃣ Copiar filas
+        for row in rows:
+            self.model.add_row(row)
+
+        # 3️⃣ Sincronizar tabla
+        self.table.setRowCount(self.model.row_count())
+        self._init_table_items()
+        self.refresh_all_rows()
+        self.highlight_active_row()
+        self.update_summary_panel()
+
+        self._updating_ui = False
+
+    def reload_from_model(self):
+        """
+        Sincroniza completamente la tabla con el modelo actual
+        (tras cargar una proforma)
+        """
+        self._updating_ui = True
+
+        # 1️⃣ Ajustar número de filas
+        self.table.setRowCount(self.model.row_count())
+
+        # 2️⃣ Asegurar items
+        self._init_table_items()
+
+        # 3️⃣ Pintar contenido
+        self.refresh_all_rows()
+
+        # 4️⃣ Reset fila activa
+        self.active_row = 0
+        self.state.active_row = 0
+
+        # 5️⃣ Refrescar UI
+        self.highlight_active_row()
+        self.update_summary_panel()
+
+        self._updating_ui = False
 
 
 class UserEditDelegate(QStyledItemDelegate):
@@ -703,6 +752,7 @@ class UserEditDelegate(QStyledItemDelegate):
     def destroyEditor(self, editor, index):
         self.table.user_editing = False
         super().destroyEditor(editor, index)
+
 
 
 

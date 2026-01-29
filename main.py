@@ -6,6 +6,7 @@ from ui.ui_table import ProformaTableWindow
 from ui.ui_main import MainWindow
 from PySide6.QtGui import QFont
 
+
 def main():
     base_font = QFont()
     base_font.setPointSize(10)

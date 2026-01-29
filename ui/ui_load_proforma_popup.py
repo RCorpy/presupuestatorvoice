@@ -5,13 +5,15 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
+from db.proformas_repository import search_proformas, load_proforma_rows
+import sqlite3
 
 
 class LoadProformaPopup(QDialog):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, proforma_model=None):
         super().__init__(parent)
-
+        self.proforma_model = proforma_model
         base_font = QFont()
         base_font.setPointSize(18)
         self.setFont(base_font)
@@ -54,6 +56,7 @@ class LoadProformaPopup(QDialog):
         self.lbl_area = QLabel("-")
         self.lbl_color = QLabel("-")
         self.lbl_date = QLabel("-")
+        self.lbl_total = QLabel("-")
 
         preview_layout.addWidget(QLabel("Cliente:"))
         preview_layout.addWidget(self.lbl_client)
@@ -69,6 +72,10 @@ class LoadProformaPopup(QDialog):
 
         preview_layout.addWidget(QLabel("Fecha:"))
         preview_layout.addWidget(self.lbl_date)
+
+        preview_layout.addWidget(QLabel("Total:"))
+        preview_layout.addWidget(self.lbl_total)
+
 
         preview_box.setLayout(preview_layout)
         body.addWidget(preview_box, 1)
@@ -104,31 +111,43 @@ class LoadProformaPopup(QDialog):
     # DATA
     # ==========================
     def update_list(self):
-        text = self.search_input.text().strip().lower()
+        text = self.search_input.text().strip()
         self.list_widget.clear()
 
         try:
-            from db.proformas_repository import get_proformas_matches
-            proformas = get_proformas_matches(text)
-
+            proformas = search_proformas(text)  # devuelve lista de tuplas: id, name, phone, area_m2, main_color, created_at
         except Exception:
-            proformas = self._mock_proformas(text)
+            proformas = []  # fallback vacío
 
         for p in proformas:
-            label = f"{p['client_name']} — {p['area_m2']} m² — {p['color']}"
+            proforma_id, name, phone, area_m2, color, created_at = p
+            label = f"{created_at[:10]} — {name} — {area_m2} m² — {color}"
             item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, p)
+            item.setData(Qt.UserRole, proforma_id)  # guardamos solo el ID
             self.list_widget.addItem(item)
 
-    def on_item_selected(self, item):
-        proforma = item.data(Qt.UserRole)
-        self.selected_proforma = proforma
 
-        self.lbl_client.setText(proforma["client_name"])
-        self.lbl_phone.setText(proforma["phone"])
-        self.lbl_area.setText(f"{proforma['area_m2']} m²")
-        self.lbl_color.setText(proforma["color"])
-        self.lbl_date.setText(proforma["date"])
+    def on_item_selected(self, item):
+        proforma_id = item.data(Qt.UserRole)
+        self.selected_proforma = proforma_id
+
+        from db.proformas_repository import get_proforma_preview
+
+        row = get_proforma_preview(proforma_id)
+
+        if row:
+            name, phone, area_m2, color, created_at = row
+            self.lbl_client.setText(name)
+            self.lbl_phone.setText(phone)
+            self.lbl_area.setText(f"{area_m2} m²")
+            self.lbl_color.setText(color)
+            self.lbl_date.setText(created_at[:10])
+
+        rows = load_proforma_rows(proforma_id)
+        total = self._calculate_total_from_rows(rows)
+        self.lbl_total.setText(f"{total:.2f} €")
+
+
 
     def on_load(self):
         if not self.selected_proforma:
@@ -139,7 +158,15 @@ class LoadProformaPopup(QDialog):
             )
             return
 
+        if self.proforma_model:
+            rows = load_proforma_rows(self.selected_proforma)
+            print("rows", rows)
+            self.proforma_model.clear()
+            for row in rows:
+                self.proforma_model.add_row(row)
+
         self.accept()
+
 
     # ==========================
     # MOCK
@@ -174,3 +201,16 @@ class LoadProformaPopup(QDialog):
             if text in p["client_name"].lower()
             or text in p["phone"]
         ]
+
+    def _calculate_total_from_rows(self, rows):
+        total = 0.0
+        for row in rows:
+            if row.type != "PRODUCT":
+                continue
+            try:
+                qty = float(row.col_2 or 0)
+                price = float(row.col_3 or 0)
+                total += qty * price
+            except ValueError:
+                pass
+        return total

@@ -273,8 +273,7 @@ class SaveProformaPopup(QDialog):
             shipping_data = None
 
         # -------- PROFORMA --------
-        from db.proformas_repository import create_proforma
-
+        #print("1",self.proforma_model.rows)
         proforma_id = create_proforma(
             client_id=client_id,
             area_m2=self.ui_data["area_m2"],

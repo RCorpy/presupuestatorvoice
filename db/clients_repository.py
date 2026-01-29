@@ -70,13 +70,10 @@ def get_matches(phone: str = "", name: str = ""):
 
 # returns: "created" | "updated" | "unchanged"
 def create_or_update_client(data: dict) -> int:
-    """
-    Crea o actualiza un cliente y devuelve siempre su client_id
-    """
     conn = _get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT id, name, email, cif, address, cp, city, province FROM clients WHERE phone = ?", (data["phone"],))
+    cur.execute("SELECT id, * FROM clients WHERE phone = ?", (data["phone"],))
     row = cur.fetchone()
 
     if row is None:
@@ -96,14 +93,13 @@ def create_or_update_client(data: dict) -> int:
                 data["province"],
             )
         )
-        client_id = cur.lastrowid
         conn.commit()
+        client_id = cur.lastrowid
         conn.close()
         return client_id
 
     # cliente existe → comprobamos cambios
-    client_id = row[0]
-    columns = ["name", "email", "cif", "address", "cp", "city", "province"]
+    columns = ["name", "phone", "email", "cif", "address", "cp", "city", "province"]
     existing = dict(zip(columns, row[1:]))
 
     changed = any(existing[k] != data[k] for k in columns)
@@ -113,7 +109,7 @@ def create_or_update_client(data: dict) -> int:
             """
             UPDATE clients
             SET name=?, email=?, cif=?, address=?, cp=?, city=?, province=?
-            WHERE id=?
+            WHERE phone=?
             """,
             (
                 data["name"],
@@ -123,13 +119,15 @@ def create_or_update_client(data: dict) -> int:
                 data["cp"],
                 data["city"],
                 data["province"],
-                client_id
+                data["phone"],
             )
         )
         conn.commit()
 
+    client_id = row[0]  # id existente
     conn.close()
     return client_id
+
 
 
 
