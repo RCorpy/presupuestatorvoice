@@ -1,9 +1,14 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QTextEdit, QLabel, QPushButton,
-    QGroupBox, QListWidget, QListWidgetItem, QDateEdit
+    QGroupBox, QListWidget, QListWidgetItem, QDateEdit, QMessageBox
 )
 from PySide6.QtCore import QDate
+from PySide6.QtGui import QFont
+
+from db.clients_repository import get_matches, create_or_update_client, client_exists
+
+
 
 
 class SaveProformaPopup(QDialog):
@@ -11,11 +16,16 @@ class SaveProformaPopup(QDialog):
     def __init__(self, parent, proforma_state, ui_data):
         super().__init__(parent)
 
+        base_font = QFont()
+        base_font.setPointSize(18)
+        self.setFont(base_font)
+
+
         self.proforma_state = proforma_state
         self.ui_data = ui_data
 
         self.setWindowTitle("Guardar proforma")
-        self.setMinimumSize(750, 600)
+        self.setMinimumSize(1250, 800)
 
         main_layout = QHBoxLayout(self)
 
@@ -130,7 +140,6 @@ class SaveProformaPopup(QDialog):
         cancel_btn.clicked.connect(self.reject)
 
         save_btn = QPushButton("Guardar")
-        save_btn.clicked.connect(self.accept)
 
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
@@ -145,7 +154,12 @@ class SaveProformaPopup(QDialog):
 
         self.matches_list.itemClicked.connect(self.apply_client_match)
 
+        save_btn.clicked.connect(self.on_save)
+
+
         self.update_matches()
+
+
     
     def update_matches(self):
         """
@@ -159,8 +173,11 @@ class SaveProformaPopup(QDialog):
 
         self.matches_list.clear()
 
-        # 🔧 Placeholder: aquí irá clients_repository.get_matches(...)
-        matches = self._mock_client_search(phone, name)
+        try:
+            matches = get_matches(phone, name)
+        except Exception:
+            matches = self._mock_client_search(phone, name)
+
 
         for client in matches:
             label = f"{client['name']} — {client['phone']}"
@@ -214,3 +231,35 @@ class SaveProformaPopup(QDialog):
         self.cp_input.setText(client.get("cp", ""))
         self.city_input.setText(client.get("city", ""))
         self.province_input.setText(client.get("province", ""))
+
+    def on_save(self):
+        data = {
+            "name": self.name_input.text().strip(),
+            "phone": self.phone_input.text().strip(),
+            "email": self.email_input.text().strip(),
+            "cif": self.cif_input.text().strip(),
+            "address": self.address_input.text().strip(),
+            "cp": self.cp_input.text().strip(),
+            "city": self.city_input.text().strip(),
+            "province": self.province_input.text().strip(),
+        }
+
+        result = create_or_update_client(data)
+
+        messages = []
+
+        if result == "created":
+            messages.append("Cliente creado correctamente.")
+        elif result == "updated":
+            messages.append("Cliente actualizado correctamente.")
+
+        messages.append("Proforma guardada correctamente.")
+
+        QMessageBox.information(
+            self,
+            "Guardado",
+            "\n".join(messages)
+        )
+
+        self.accept()
+

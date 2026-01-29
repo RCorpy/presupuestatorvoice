@@ -1,67 +1,143 @@
 import sqlite3
-from dataclasses import dataclass, asdict
 from datetime import datetime
 
-@dataclass
-class Client:
-    id: int | None = None
-    name: str | None = None
-    phone: str | None = None
-    email: str | None = None
-    address: str | None = None
-    city: str | None = None
-    province: str | None = None
-    postal_code: str | None = None
-    country: str | None = None
-    cif: str | None = None
-    contact: str | None = None
+DB_PATH = "materials.db"
 
-class ClientsRepository:
-    def __init__(self, db_path="proformas.db"):
-        self.conn = sqlite3.connect(db_path)
-        self.conn.row_factory = sqlite3.Row
 
-    def search(self, name=None, phone=None):
-        query = "SELECT * FROM clients WHERE 1=1"
-        params = []
-        if name:
-            query += " AND name LIKE ?"
-            params.append(f"%{name}%")
-        if phone:
-            query += " AND phone LIKE ?"
-            params.append(f"%{phone}%")
-        query += " ORDER BY name LIMIT 20"
-        cur = self.conn.execute(query, params)
-        return [Client(**dict(row)) for row in cur.fetchall()]
+def _get_connection():
+    return sqlite3.connect(DB_PATH)
 
-    def create_or_update(self, client: Client):
-        now = datetime.now().isoformat()
-        if client.id:
-            # Update existing
-            self.conn.execute("""
-                UPDATE clients SET
-                    name = ?, phone = ?, email = ?, address = ?, city = ?,
-                    province = ?, postal_code = ?, country = ?, cif = ?, contact = ?,
-                    updated_at = ?
-                WHERE id = ?
-            """, (
-                client.name, client.phone, client.email, client.address, client.city,
-                client.province, client.postal_code, client.country, client.cif, client.contact,
-                now, client.id
-            ))
-            self.conn.commit()
-            return client.id
-        else:
-            # Insert new
-            cur = self.conn.execute("""
-                INSERT INTO clients (
-                    name, phone, email, address, city, province,
-                    postal_code, country, cif, contact, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                client.name, client.phone, client.email, client.address, client.city,
-                client.province, client.postal_code, client.country, client.cif, client.contact,
-                now
-            ))
-            self.conn.commit()
-            return cur.lastrowid
+def init_db():
+    conn = _get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            name TEXT,
+            phone TEXT UNIQUE,
+
+            email TEXT,
+            cif TEXT,
+
+            address TEXT,
+            cp TEXT,
+            city TEXT,
+            province TEXT,
+
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+# -------------------------------------------------
+# BÚSQUEDA
+# -------------------------------------------------
+
+def get_matches(phone: str = "", name: str = ""):
+    conn = _get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    if phone:
+        cur.execute("""
+            SELECT * FROM clients
+            WHERE phone LIKE ?
+            ORDER BY name
+            LIMIT 20
+        """, (f"%{phone}%",))
+    else:
+        cur.execute("""
+            SELECT * FROM clients
+            WHERE name LIKE ?
+            ORDER BY name
+            LIMIT 20
+        """, (f"%{name}%",))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return [dict(row) for row in rows]
+
+
+# -------------------------------------------------
+# CREAR O EDITAR
+# -------------------------------------------------
+
+# returns: "created" | "updated" | "unchanged"
+def create_or_update_client(data: dict) -> str:
+    conn = _get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM clients WHERE phone = ?", (data["phone"],))
+    row = cur.fetchone()
+
+    if row is None:
+        cur.execute(
+            """
+            INSERT INTO clients (name, phone, email, cif, address, cp, city, province)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["name"],
+                data["phone"],
+                data["email"],
+                data["cif"],
+                data["address"],
+                data["cp"],
+                data["city"],
+                data["province"],
+            )
+        )
+        conn.commit()
+        conn.close()
+        return "created"
+
+    # cliente existe → comprobamos cambios
+    columns = ["name", "phone", "email", "cif", "address", "cp", "city", "province"]
+    existing = dict(zip(columns, row[1:]))
+
+    changed = any(existing[k] != data[k] for k in columns)
+
+    if not changed:
+        conn.close()
+        return "unchanged"
+
+    cur.execute(
+        """
+        UPDATE clients
+        SET name=?, email=?, cif=?, address=?, cp=?, city=?, province=?
+        WHERE phone=?
+        """,
+        (
+            data["name"],
+            data["email"],
+            data["cif"],
+            data["address"],
+            data["cp"],
+            data["city"],
+            data["province"],
+            data["phone"],
+        )
+    )
+
+    conn.commit()
+    conn.close()
+    return "updated"
+
+
+
+def client_exists(phone: str) -> bool:
+    conn = _get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT 1 FROM clients WHERE phone = ?", (phone,))
+    exists = cur.fetchone() is not None
+    conn.close()
+    return exists
+
+
+init_db()
