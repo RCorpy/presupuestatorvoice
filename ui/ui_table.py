@@ -133,12 +133,6 @@ class ProformaTableWindow(QMainWindow):
         self.listen_button.clicked.connect(self.listen_voice)
         sidebar_layout.addWidget(self.listen_button, alignment=Qt.AlignHCenter)
 
-        self.excel_button = QPushButton("💾")
-        self.excel_button.setFixedSize(40, 40)
-        self.excel_button.setToolTip("Exportar a Excel")
-        self.excel_button.clicked.connect(self.export_excel)
-        sidebar_layout.addWidget(self.excel_button, alignment=Qt.AlignHCenter)
-
         # --------------------------------------------------
         # Tabla
         # --------------------------------------------------
@@ -162,7 +156,7 @@ class ProformaTableWindow(QMainWindow):
         # Panel derecho (Resumen + Buscador)
         # --------------------------------------------------
         self.right_panel = QWidget()
-        self.right_panel.setMaximumWidth(350)
+        self.right_panel.setMaximumWidth(450)
 
         right_layout = QVBoxLayout(self.right_panel)
         right_layout.setContentsMargins(5, 5, 5, 5)
@@ -219,11 +213,11 @@ class ProformaTableWindow(QMainWindow):
         self.highlight_active_row()
 
 
-        self.table.setColumnWidth(0, 200)  # suficiente para mostrar info
-        self.table.setColumnWidth(1, 250)  # producto
-        self.table.setColumnWidth(2, 70)   # cantidad
-        self.table.setColumnWidth(3, 70)   # precio
-        self.table.setColumnWidth(4, 70)   # total
+        self.table.setColumnWidth(0, 220)  # suficiente para mostrar info
+        self.table.setColumnWidth(1, 450)  # producto
+        self.table.setColumnWidth(2, 150)   # cantidad
+        self.table.setColumnWidth(3, 150)   # precio
+        self.table.setColumnWidth(4, 150)   # total
 
 
 
@@ -510,13 +504,6 @@ class ProformaTableWindow(QMainWindow):
     # ======================================================
     # Excel
     # ======================================================
-
-    def export_excel(self):
-        try:
-            path = export_proforma_to_excel(self.model)
-            self.status_label.setText(f"Excel creado: {path}")
-        except Exception as e:
-            self.status_label.setText(f"Error exportando Excel: {e}")
 
     def add_product_row(self):
         insert_at = self.active_row + 1

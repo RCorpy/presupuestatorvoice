@@ -4,22 +4,16 @@ from PySide6.QtWidgets import (
     QGroupBox, QListWidget, QListWidgetItem, QDateEdit, QMessageBox
 )
 from PySide6.QtCore import QDate
-from PySide6.QtGui import QFont
 
 from db.clients_repository import get_matches, create_or_update_client, client_exists
 from db.proformas_repository import create_proforma
-
+from excel.excel_exporter import export_proforma_to_excel
 
 
 class SaveProformaPopup(QDialog):
 
     def __init__(self, parent, proforma_model, ui_data):
         super().__init__(parent)
-
-        base_font = QFont()
-        base_font.setPointSize(18)
-        self.setFont(base_font)
-
 
         self.proforma_model = proforma_model
         self.ui_data = ui_data
@@ -134,17 +128,30 @@ class SaveProformaPopup(QDialog):
         # BOTONES
         # ==========================
         btn_row = QHBoxLayout()
-        btn_row.addStretch()
 
+        # 🟥 IZQUIERDA → cancelar
+        left_layout = QHBoxLayout()
         cancel_btn = QPushButton("Cancelar")
-        cancel_btn.clicked.connect(self.reject)
+        left_layout.addWidget(cancel_btn)
 
+        # 🟨 CENTRO → guardar + excel
+        center_layout = QHBoxLayout()
+        save_excel_btn = QPushButton("Guardar y exportar Excel")
+        center_layout.addWidget(save_excel_btn)
+
+        # 🟩 DERECHA → guardar
+        right_layout = QHBoxLayout()
         save_btn = QPushButton("Guardar")
+        right_layout.addWidget(save_btn)
 
-        btn_row.addWidget(cancel_btn)
-        btn_row.addWidget(save_btn)
+        btn_row.addLayout(left_layout)
+        btn_row.addStretch()
+        btn_row.addLayout(center_layout)
+        btn_row.addStretch()
+        btn_row.addLayout(right_layout)
 
         left_col.addLayout(btn_row)
+
 
         # ==========================
         # CONEXIONES (búsqueda)
@@ -155,6 +162,9 @@ class SaveProformaPopup(QDialog):
         self.matches_list.itemClicked.connect(self.apply_client_match)
 
         save_btn.clicked.connect(self.on_save)
+        save_excel_btn.clicked.connect(self.on_save_and_export)
+        cancel_btn.clicked.connect(self.reject)
+
 
 
         self.update_matches()
@@ -292,5 +302,23 @@ class SaveProformaPopup(QDialog):
         )
 
         self.accept()
+        return True
+
+    def on_save_and_export(self):
+        is_saved = self.on_save()  # usa el mismo método de guardado
+        if not is_saved:
+            return
+        try:
+            print("exporting", self.proforma_model)
+            export_proforma_to_excel(self.proforma_model)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Proforma guardada",
+                f"La proforma se guardó, pero el Excel falló:\n{e}"
+            )
+
+        self.accept()
+
 
 

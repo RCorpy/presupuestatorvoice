@@ -3,7 +3,6 @@ from PySide6.QtWidgets import (
     QLineEdit, QListWidget, QListWidgetItem,
     QPushButton, QGroupBox, QMessageBox
 )
-from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
 from db.proformas_repository import search_proformas, load_proforma_rows
 import sqlite3
@@ -14,9 +13,6 @@ class LoadProformaPopup(QDialog):
     def __init__(self, parent=None, proforma_model=None):
         super().__init__(parent)
         self.proforma_model = proforma_model
-        base_font = QFont()
-        base_font.setPointSize(18)
-        self.setFont(base_font)
 
         self.setWindowTitle("Cargar proforma")
         self.setMinimumSize(900, 600)
@@ -86,24 +82,43 @@ class LoadProformaPopup(QDialog):
         # BOTONES
         # ==========================
         btn_row = QHBoxLayout()
-        btn_row.addStretch()
 
+        # 🟥 IZQUIERDA → cancelar
+        left_layout = QHBoxLayout()
         cancel_btn = QPushButton("Cancelar")
-        load_btn = QPushButton("Cargar proforma")
+        left_layout.addWidget(cancel_btn)
 
-        btn_row.addWidget(cancel_btn)
-        btn_row.addWidget(load_btn)
+        # 🟨 CENTRO → exportar
+        center_layout = QHBoxLayout()
+        excel_btn = QPushButton("Exportar a Excel")
+        center_layout.addWidget(excel_btn)
+
+        # 🟩 DERECHA → cargar
+        right_layout = QHBoxLayout()
+        load_btn = QPushButton("Cargar proforma")
+        right_layout.addWidget(load_btn)
+
+        # Espacios entre zonas
+        btn_row.addLayout(left_layout)
+        btn_row.addStretch()
+        btn_row.addLayout(center_layout)
+        btn_row.addStretch()
+        btn_row.addLayout(right_layout)
 
         main_layout.addLayout(btn_row)
+
 
         # ==========================
         # CONEXIONES
         # ==========================
         cancel_btn.clicked.connect(self.reject)
         load_btn.clicked.connect(self.on_load)
+        excel_btn.clicked.connect(self.on_export_excel)
+
 
         self.search_input.textChanged.connect(self.update_list)
         self.list_widget.itemClicked.connect(self.on_item_selected)
+        
 
         self.update_list()
 
@@ -214,3 +229,32 @@ class LoadProformaPopup(QDialog):
             except ValueError:
                 pass
         return total
+
+    def on_export_excel(self):
+        if not self.selected_proforma:
+            QMessageBox.warning(
+                self,
+                "Selecciona una proforma",
+                "Debes seleccionar una proforma primero."
+            )
+            return
+
+        if not self.proforma_model:
+            return
+
+        # cargar filas en el modelo temporal
+        rows = load_proforma_rows(self.selected_proforma)
+        self.proforma_model.clear()
+        for row in rows:
+            self.proforma_model.add_row(row)
+
+        from excel.excel_exporter import export_proforma_to_excel
+
+        try:
+            export_proforma_to_excel(self.proforma_model)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudo exportar el Excel:\n{e}"
+            )

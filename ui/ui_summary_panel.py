@@ -12,26 +12,26 @@ class SummaryPanel(QWidget):
         # ---- Título ----
         title = QLabel("📊 RESUMEN")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        #title.setStyleSheet("font-size: 16px; font-weight: bold;")
         layout.addWidget(title)
 
         layout.addWidget(self._separator())
 
         # ---- Precio total ----
         self.total_price_label = QLabel("💰 Precio total:\n0 €")
-        self.total_price_label.setStyleSheet("font-size: 14px;")
+        #self.total_price_label.setStyleSheet("font-size: 14px;")
         layout.addWidget(self.total_price_label)
 
         # ---- Precio / m2 ----
         self.price_m2_label = QLabel("📐 Precio / m²:\n0 €/m²")
-        self.price_m2_label.setStyleSheet("font-size: 14px;")
+        #self.price_m2_label.setStyleSheet("font-size: 14px;")
         layout.addWidget(self.price_m2_label)
 
         layout.addWidget(self._separator())
 
         # ---- Consumo ----
         self.consumption_title = QLabel("🧪 CONSUMO")
-        self.consumption_title.setStyleSheet("font-weight: bold;")
+        #self.consumption_title.setStyleSheet("font-weight: bold;")
         layout.addWidget(self.consumption_title)
 
         self.gm2_primer_label = QLabel("Imprimación: 0 g/m²")

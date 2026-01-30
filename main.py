@@ -5,11 +5,13 @@ from state.proforma_state import ProformaState
 from ui.ui_table import ProformaTableWindow
 from ui.ui_main import MainWindow
 from PySide6.QtGui import QFont
+from PySide6.QtGui import QGuiApplication
+
 
 
 def main():
     base_font = QFont()
-    base_font.setPointSize(10)
+    base_font.setPointSize(14)
     
     app = QApplication(sys.argv)
     app.setFont(base_font)
@@ -27,7 +29,13 @@ def main():
     layout.addWidget(control_panel)
     layout.addWidget(table_window)
     container.setLayout(layout)
-    container.resize(1700, 650)
+    container.resize(1700, 900)
+    # 🧭 Centrar pero desplazando un poco a la izquierda
+    screen = QGuiApplication.primaryScreen().availableGeometry()
+    x = screen.center().x() - container.width() // 2 - 100
+    y = screen.center().y() - container.height() // 2
+
+    container.move(x, y)
     container.show()
 
     sys.exit(app.exec())

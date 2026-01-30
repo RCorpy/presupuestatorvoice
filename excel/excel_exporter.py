@@ -1,4 +1,4 @@
-#excel.excel_exporter
+# excel/excel_exporter.py
 
 import openpyxl
 from openpyxl.styles import PatternFill, Font
@@ -29,60 +29,140 @@ def export_proforma_to_excel(model):
     wb = openpyxl.load_workbook(BASE_EXCEL)
     ws = wb.active
 
-    start_row = 19  # fila inicial B19
-    start_col = 2   # columna B
-
+    # ─────────────────────────────
+    # Posición inicial (B19)
+    # ─────────────────────────────
+    start_row = 19
+    start_col = 2  # columna B
     current_row = start_row
 
-    # estilos
+    # ─────────────────────────────
+    # Estilos
+    # ─────────────────────────────
     default_font = Font(name="Calibri", size=12, bold=True)
-    title_fill = PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid")
-    title_font = Font(name="Calibri", size=12, color="FFFFFF", bold=True)
 
+    title_fill = PatternFill(
+        start_color="0000FF",
+        end_color="0000FF",
+        fill_type="solid"
+    )
+    title_font = Font(
+        name="Calibri",
+        size=12,
+        color="FFFFFF",
+        bold=True
+    )
+
+    # ─────────────────────────────
+    # Render filas
+    # ─────────────────────────────
     for row in model.rows:
-        if row.type == "PRODUCT":
-            cells = [
-                (row.col_1, start_col),       # nombre producto
-                (row.col_2, start_col + 1),   # cantidad
-                (row.col_3, start_col + 2),   # precio unitario
-                (row.col_4, start_col + 3)    # total
-            ]
-            for value, col in cells:
-                cell = ws.cell(row=current_row, column=col, value=value)
-                cell.font = default_font
-            current_row += 1
 
-        elif row.type == "TITLE":
-            cell = ws.cell(row=current_row, column=start_col, value=row.col_1)
+        # =========================
+        # TITLE
+        # =========================
+        if row.type == "TITLE":
+            ws.merge_cells(
+                start_row=current_row,
+                start_column=start_col,
+                end_row=current_row,
+                end_column=start_col + 4
+            )
+
+            cell = ws.cell(
+                row=current_row,
+                column=start_col,
+                value=row.col_0
+            )
             cell.fill = title_fill
             cell.font = title_font
+
             current_row += 1
 
+        # =========================
+        # PRODUCT
+        # =========================
+        elif row.type == "PRODUCT":
+            if float(row.col_2) > 0:
+                # B → Kits
+                ws.cell(
+                    row=current_row,
+                    column=start_col,
+                    value=row.col_0
+                ).font = default_font
+
+                # C → Producto
+                ws.cell(
+                    row=current_row,
+                    column=start_col + 1,
+                    value=row.col_1
+                ).font = default_font
+
+                # D → Cantidad
+                qty_cell = ws.cell(
+                    row=current_row,
+                    column=start_col + 2,
+                    value=row.col_2
+                )
+                qty_cell.font = default_font
+
+                # E → Precio €/Ud
+                price_cell = ws.cell(
+                    row=current_row,
+                    column=start_col + 3,
+                    value=row.col_3
+                )
+                price_cell.font = default_font
+
+                # F → Total (fórmula Excel)
+                total_cell = ws.cell(
+                    row=current_row,
+                    column=start_col + 4,
+                    value=f"={qty_cell.coordinate}*{price_cell.coordinate}"
+                )
+                total_cell.font = default_font
+
+                current_row += 1
+
+        # =========================
+        # INFO (comentarios)
+        # =========================
         elif row.type == "INFO":
-            cells = [
-                (row.col_1, start_col),       # info col1 en B
-                (row.col_2, start_col + 1)    # info col2 en C
-            ]
-            for value, col in cells:
-                cell = ws.cell(row=current_row, column=col, value=value)
-                cell.font = default_font
+            ws.merge_cells(
+                start_row=current_row,
+                start_column=start_col,
+                end_row=current_row,
+                end_column=start_col + 4
+            )
+
+            cell = ws.cell(
+                row=current_row,
+                column=start_col,
+                value=row.col_0
+            )
+            cell.font = default_font
+
             current_row += 1
 
+        # =========================
+        # EMPTY
+        # =========================
         elif row.type == "EMPTY":
             current_row += 1
 
     wb.save(output_path)
 
-    # abrir el archivo automáticamente
+    # ─────────────────────────────
+    # Abrir automáticamente
+    # ─────────────────────────────
     try:
         if platform.system() == "Windows":
             os.startfile(output_path)
         elif platform.system() == "Darwin":
             subprocess.call(["open", output_path])
-        else:  # Linux
+        else:
             subprocess.call(["xdg-open", output_path])
     except Exception as e:
         print(f"No se pudo abrir automáticamente el archivo: {e}")
 
     return output_path
-

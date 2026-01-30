@@ -102,7 +102,7 @@ class MainWindow(QWidget):
         self.multiplier_spin.setRange(0.1, 10.0)
         self.multiplier_spin.setSingleStep(0.1)
         self.multiplier_spin.setValue(1.0)
-        self.multiplier_spin.setFixedWidth(70)
+        self.multiplier_spin.setFixedWidth(100)
         group1_layout.addWidget(self.multiplier_spin)
 
         main_layout.addLayout(group1_layout)
