@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "materials.db"
+DB_PATH = "database.db"
 
 
 def _get_connection():

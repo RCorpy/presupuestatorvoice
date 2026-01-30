@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from db.proformas_repository import search_proformas, load_proforma_rows
+from excel.excel_exporter import export_proforma_to_excel
+from db.proformas_repository import get_proforma_full_data
 import sqlite3
 
 
@@ -242,13 +244,49 @@ class LoadProformaPopup(QDialog):
         if not self.proforma_model:
             return
 
-        # cargar filas en el modelo temporal
+        # 🔹 Cargar filas
         rows = load_proforma_rows(self.selected_proforma)
         self.proforma_model.clear()
         for row in rows:
             self.proforma_model.add_row(row)
 
-        from excel.excel_exporter import export_proforma_to_excel
+        # 🔹 Cargar datos generales
+
+
+        data = get_proforma_full_data(self.selected_proforma)
+        if data:
+            (
+                pid,
+                area_m2,
+                color,
+                created_at,
+                discount,
+                shipping,
+                name,
+                phone,
+                email,
+                address,
+                city,
+                province,
+                cp,
+                cif
+            ) = data
+
+            self.proforma_model.proforma_id = pid
+            self.proforma_model.area_m2 = area_m2
+            self.proforma_model.main_color = color
+            self.proforma_model.created_at = created_at
+            self.proforma_model.discount_percent = discount
+            self.proforma_model.shipping_cost = shipping
+
+            self.proforma_model.client_name = name
+            self.proforma_model.phone = phone
+            self.proforma_model.email = email
+            self.proforma_model.address = address
+            self.proforma_model.city = city
+            self.proforma_model.province = province
+            self.proforma_model.postal_code = cp
+            self.proforma_model.cif = cif
 
         try:
             export_proforma_to_excel(self.proforma_model)
@@ -258,3 +296,4 @@ class LoadProformaPopup(QDialog):
                 "Error",
                 f"No se pudo exportar el Excel:\n{e}"
             )
+

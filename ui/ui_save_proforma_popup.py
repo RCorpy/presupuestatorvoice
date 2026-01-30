@@ -305,11 +305,21 @@ class SaveProformaPopup(QDialog):
         return True
 
     def on_save_and_export(self):
-        is_saved = self.on_save()  # usa el mismo método de guardado
+        is_saved = self.on_save()
         if not is_saved:
             return
+
+        # 🔹 Inyectar datos en el modelo (para el exporter)
+        self.proforma_model.client_name = self.ui_data.get("client_name", "")
+        self.proforma_model.phone = self.ui_data.get("phone", "")
+        self.proforma_model.area_m2 = self.ui_data.get("area_m2", "")
+        self.proforma_model.main_color = self.ui_data.get("color", "")
+        self.proforma_model.discount_percent = self.ui_data.get("discount_percent", "")
+        self.proforma_model.shipping_cost = self.ui_data.get("shipping_cost", "")
+        self.proforma_model.created_at = self.ui_data.get("created_at", "")
+        self.proforma_model.proforma_id = None  # o el último si luego lo expones
+
         try:
-            print("exporting", self.proforma_model)
             export_proforma_to_excel(self.proforma_model)
         except Exception as e:
             QMessageBox.warning(
