@@ -64,6 +64,7 @@ def export_proforma_to_excel(model):
     ship_city = safe_get(model, "shipping_city")
     ship_province = safe_get(model, "shipping_province")
     ship_phone = safe_get(model, "shipping_phone")
+    shipping_notes = safe_get(model, "shipping_notes")
 
     
     # ───────────────────────────── 
@@ -97,14 +98,25 @@ def export_proforma_to_excel(model):
     # ─────────────────────────────
     # Envío
     # ─────────────────────────────
+
+    shipping_font = Font(
+        color="FF0000",   # rojo
+        size=13,          # más grande (normal suele ser 11)
+        bold=True
+    )
+
     if ship_address:
         ws["J8"] = "Datos de envio"
+        ws["J8"].font = shipping_font
     ws["J9"]  = ship_contact
     ws["J10"] = ship_address
     ws["J11"] = ship_cp
     ws["J12"] = ship_city
     ws["J13"] = ship_province
     ws["J14"] = ship_phone
+    ws["J15"] = shipping_notes
+    for cell in ["J9", "J10", "J11", "J12", "J13", "J14", "J15"]:
+        ws[cell].font = shipping_font
 
     # ─────────────────────────────
     # Totales
@@ -143,13 +155,6 @@ def export_proforma_to_excel(model):
         # TITLE
         # =========================
         if row.type == "TITLE":
-            ws.merge_cells(
-                start_row=current_row,
-                start_column=start_col,
-                end_row=current_row,
-                end_column=start_col + 4
-            )
-
             cell = ws.cell(
                 row=current_row,
                 column=start_col,
@@ -209,13 +214,6 @@ def export_proforma_to_excel(model):
         # INFO (comentarios)
         # =========================
         elif row.type == "INFO":
-            ws.merge_cells(
-                start_row=current_row,
-                start_column=start_col,
-                end_row=current_row,
-                end_column=start_col + 4
-            )
-
             cell = ws.cell(
                 row=current_row,
                 column=start_col,

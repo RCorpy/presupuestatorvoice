@@ -69,6 +69,10 @@ class SaveProformaPopup(QDialog):
         self.color_input = QLineEdit(ui_data.get("color", ""))
         self.color_input.setReadOnly(True)
 
+        self.contact_input = QLineEdit(ui_data.get("contact", ""))
+        self.discount_input = QLineEdit(str(ui_data.get("discount_percent", 50)))
+        self.shipping_cost_input = QLineEdit(str(ui_data.get("shipping_cost", 0)))
+
         self.date_input = QDateEdit()
         self.date_input.setDate(QDate.currentDate())
         self.date_input.setCalendarPopup(True)
@@ -76,6 +80,10 @@ class SaveProformaPopup(QDialog):
         proforma_form.addRow("Superficie (m²)", self.area_input)
         proforma_form.addRow("Color principal", self.color_input)
         proforma_form.addRow("Fecha", self.date_input)
+        proforma_form.addRow("Contacto", self.contact_input)
+        proforma_form.addRow("Descuento (%)", self.discount_input)
+        proforma_form.addRow("Gastos de envío (€)", self.shipping_cost_input)
+
 
         proforma_box.setLayout(proforma_form)
         left_col.addWidget(proforma_box)
@@ -254,6 +262,15 @@ class SaveProformaPopup(QDialog):
             )
             return False
 
+        if not self.has_valid_products():
+            QMessageBox.warning(
+                self,
+                "Proforma vacía",
+                "La proforma debe tener al menos un producto con cantidad y precio."
+            )
+            return False
+
+
         # -------- CLIENTE FISCAL --------
         client_data = {
             "name": name,
@@ -281,18 +298,22 @@ class SaveProformaPopup(QDialog):
 
         if not any(shipping_data.values()):
             shipping_data = None
+        
+        discount, shipping_cost =self._get_discount_and_shipping()
+
 
         # -------- PROFORMA --------
         proforma_id = create_proforma(
             client_id=client_id,
             area_m2=self.ui_data["area_m2"],
             main_color=self.ui_data["color"],
-            discount_percent=self.ui_data.get("discount_percent", 0),
-            shipping_cost=self.ui_data.get("shipping_cost", 0),
+            discount_percent=discount,
+            shipping_cost=shipping_cost,
             table_rows=self.proforma_model.rows,
             shipping_data=shipping_data,
             notes=None
         )
+        self.proforma_model.id = proforma_id
 
         QMessageBox.information(
             self,
@@ -322,10 +343,13 @@ class SaveProformaPopup(QDialog):
         # ==========================
         # DATOS PROFORMA
         # ==========================
+        discount, shipping_cost =self._get_discount_and_shipping()
         self.proforma_model.area_m2 = self.ui_data.get("area_m2", "")
         self.proforma_model.main_color = self.ui_data.get("color", "")
-        self.proforma_model.discount_percent = self.ui_data.get("discount_percent", 0)
-        self.proforma_model.shipping_cost = self.ui_data.get("shipping_cost", 0)
+        self.proforma_model.discount_percent = discount
+        self.proforma_model.shipping_cost = shipping_cost
+        self.proforma_model.contact = self.contact_input.text().strip()
+
 
         self.proforma_model.shipping_contact = self.ship_contact.text().strip()
         self.proforma_model.shipping_address = self.ship_address.text().strip()
@@ -339,7 +363,7 @@ class SaveProformaPopup(QDialog):
         self.proforma_model.created_at = datetime.now().strftime("%Y-%m-%d")
 
         # opcional: si más adelante expones el ID
-        self.proforma_model.proforma_id = ""
+        self.proforma_model.proforma_id = self.proforma_model.id
 
         # ==========================
         # EXPORT
@@ -358,3 +382,28 @@ class SaveProformaPopup(QDialog):
 
 
 
+    def _get_discount_and_shipping(self):
+        try:
+            discount = float(self.discount_input.text() or 50)
+        except ValueError:
+            discount = 50
+
+        try:
+            shipping = float(self.shipping_cost_input.text() or 0)
+        except ValueError:
+            shipping = 0
+
+        return discount, shipping
+
+    def has_valid_products(self):
+        for row in self.proforma_model.rows:
+            if row.type == "PRODUCT":
+                try:
+                    qty = float(row.col_2)
+                    price = float(row.col_3)
+                except (TypeError, ValueError):
+                    continue
+
+                if qty > 0 and price > 0:
+                    return True
+        return False

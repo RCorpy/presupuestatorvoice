@@ -294,10 +294,12 @@ class LoadProformaPopup(QDialog):
             # -------- ENVÍO --------
             self.proforma_model.shipping_contact = shipping_data.get("contact", "")
             self.proforma_model.shipping_address = shipping_data.get("address", "")
-            self.proforma_model.shipping_cp = shipping_data.get("cp", "")
+            self.proforma_model.shipping_postal_code = shipping_data.get("cp", "")
             self.proforma_model.shipping_city = shipping_data.get("city", "")
             self.proforma_model.shipping_province = shipping_data.get("province", "")
             self.proforma_model.shipping_phone = shipping_data.get("phone", "")
+            self.proforma_model.shipping_notes = shipping_data.get("notes", "")
+
 
 
 

@@ -223,7 +223,7 @@ def get_proforma_full_data(proforma_id: int):
             p.created_at,
             p.discount_percent,
             p.shipping_cost,
-            p.shipping_data,
+            p.shipping_json,
             c.name,
             c.phone,
             c.email,
