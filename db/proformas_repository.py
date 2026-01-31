@@ -223,6 +223,7 @@ def get_proforma_full_data(proforma_id: int):
             p.created_at,
             p.discount_percent,
             p.shipping_cost,
+            p.shipping_data,
             c.name,
             c.phone,
             c.email,
@@ -239,3 +240,4 @@ def get_proforma_full_data(proforma_id: int):
     row = cur.fetchone()
     conn.close()
     return row
+

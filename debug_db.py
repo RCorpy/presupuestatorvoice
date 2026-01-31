@@ -1,51 +1,39 @@
 import sqlite3
+import json
 
-# rutas
-src_db = "materials.db"
-dst_db = "database.db"
+DB_PATH = "database.db"
 
-# abrir conexiones
-src = sqlite3.connect(src_db)
-dst = sqlite3.connect(dst_db)
+def main():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
 
-src_cur = src.cursor()
-dst_cur = dst.cursor()
+    # 1️⃣ Añadir columna 'shipping_data' si no existe
+    try:
+        cur.execute("ALTER TABLE proformas ADD COLUMN shipping_data TEXT")
+        print("Columna 'shipping_data' añadida correctamente.")
+    except sqlite3.OperationalError:
+        print("La columna 'shipping_data' ya existe, seguimos.")
 
-# 1️⃣ borrar tabla clients vieja si existe
-dst_cur.execute("DROP TABLE IF EXISTS clients")
+    # 2️⃣ Obtener todas las proformas
+    cur.execute("SELECT id FROM proformas")
+    proformas = cur.fetchall()
 
-# 2️⃣ crear tabla clients correcta
-dst_cur.execute("""
-CREATE TABLE clients (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    phone TEXT,
-    email TEXT,
-    address TEXT,
-    city TEXT,
-    province TEXT,
-    cp TEXT,
-    cif TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-)
-""")
-dst.commit()
+    # 3️⃣ Inicializar shipping_data como vacío JSON
+    for (pid,) in proformas:
+        empty_shipping = json.dumps({
+            "contact": "",
+            "address": "",
+            "postal_code": "",
+            "city": "",
+            "province": "",
+            "phone": "",
+            "notes": ""
+        }, ensure_ascii=False)
+        cur.execute("UPDATE proformas SET shipping_data = ? WHERE id = ?", (empty_shipping, pid))
 
-# 3️⃣ leer datos de clients en materials.db
-src_cur.execute("SELECT id, name, phone, email, address, city, province, cp, cif FROM clients")
-rows = src_cur.fetchall()
+    conn.commit()
+    conn.close()
+    print("Columna 'shipping_data' inicializada para todas las proformas.")
 
-# 4️⃣ insertarlos en database.db
-for row in rows:
-    dst_cur.execute("""
-        INSERT INTO clients (id, name, phone, email, address, city, province, cp, cif)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, row)
-
-dst.commit()
-print(f"Se han migrado {len(rows)} clientes a database.db")
-
-# cerrar conexiones
-src.close()
-dst.close()
+if __name__ == "__main__":
+    main()

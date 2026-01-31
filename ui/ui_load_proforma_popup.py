@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from db.proformas_repository import search_proformas, load_proforma_rows
 from excel.excel_exporter import export_proforma_to_excel
 from db.proformas_repository import get_proforma_full_data
+import json
 import sqlite3
 
 
@@ -177,7 +178,6 @@ class LoadProformaPopup(QDialog):
 
         if self.proforma_model:
             rows = load_proforma_rows(self.selected_proforma)
-            print("rows", rows)
             self.proforma_model.clear()
             for row in rows:
                 self.proforma_model.add_row(row)
@@ -262,6 +262,7 @@ class LoadProformaPopup(QDialog):
                 created_at,
                 discount,
                 shipping,
+                shipping_data,
                 name,
                 phone,
                 email,
@@ -271,6 +272,9 @@ class LoadProformaPopup(QDialog):
                 cp,
                 cif
             ) = data
+
+            shipping_data = json.loads(shipping_data) if shipping_data else {}
+
 
             self.proforma_model.proforma_id = pid
             self.proforma_model.area_m2 = area_m2
@@ -287,6 +291,15 @@ class LoadProformaPopup(QDialog):
             self.proforma_model.province = province
             self.proforma_model.postal_code = cp
             self.proforma_model.cif = cif
+            # -------- ENVÍO --------
+            self.proforma_model.shipping_contact = shipping_data.get("contact", "")
+            self.proforma_model.shipping_address = shipping_data.get("address", "")
+            self.proforma_model.shipping_cp = shipping_data.get("cp", "")
+            self.proforma_model.shipping_city = shipping_data.get("city", "")
+            self.proforma_model.shipping_province = shipping_data.get("province", "")
+            self.proforma_model.shipping_phone = shipping_data.get("phone", "")
+
+
 
         try:
             export_proforma_to_excel(self.proforma_model)

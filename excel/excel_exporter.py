@@ -30,6 +30,10 @@ def export_proforma_to_excel(model):
     # Datos generales (opcionales)
     # ─────────────────────────────
 
+    # ─────────────────────────────
+    # Datos generales
+    # ─────────────────────────────
+
     client_name = safe_get(model, "client_name")
     address = safe_get(model, "address")
     city = safe_get(model, "city")
@@ -46,17 +50,27 @@ def export_proforma_to_excel(model):
     discount = safe_get(model, "discount_percent")
     shipping = safe_get(model, "shipping_cost")
 
-    created_at = safe_get(model, "created_at", datetime.now().strftime("%d/%m/%Y"))
-    proforma_id = safe_get(model, "proforma_id", None)
+    created_at = safe_get(model, "created_at")
+    proforma_id = safe_get(model, "proforma_id")
 
     proforma_number = format_proforma_number(proforma_id)
 
+    # ─────────────────────────────
+    # Envío (proforma)
+    # ─────────────────────────────
+    ship_contact = safe_get(model, "shipping_contact")
+    ship_address = safe_get(model, "shipping_address")
+    ship_cp = safe_get(model, "shipping_postal_code")
+    ship_city = safe_get(model, "shipping_city")
+    ship_province = safe_get(model, "shipping_province")
+    ship_phone = safe_get(model, "shipping_phone")
 
-    # ─────────────────────────────
-    # Posición inicial (B19)
-    # ─────────────────────────────
+    
+    # ───────────────────────────── 
+    # # Posición inicial (B19)
+    # # ───────────────────────────── 
     start_row = 19
-    start_col = 2  # columna B
+    start_col = 2
     current_row = start_row
 
     # ─────────────────────────────
@@ -77,17 +91,30 @@ def export_proforma_to_excel(model):
     # ─────────────────────────────
     # Proforma
     # ─────────────────────────────
-    ws["D5"] = f"Proforma: {proforma_number}"
-    ws["D6"] = f"Fecha: {created_at}"
+    ws["D5"] = f"Proforma: {format_proforma_number(proforma_id)}"
+    ws["D6"] = f"Fecha: {format_date(created_at)}"
+
+    # ─────────────────────────────
+    # Envío
+    # ─────────────────────────────
+    if ship_address:
+        ws["J8"] = "Datos de envio"
+    ws["J9"]  = ship_contact
+    ws["J10"] = ship_address
+    ws["J11"] = ship_cp
+    ws["J12"] = ship_city
+    ws["J13"] = ship_province
+    ws["J14"] = ship_phone
 
     # ─────────────────────────────
     # Totales
     # ─────────────────────────────
-    if discount != "":
+    if discount not in ("", None):
         ws["D43"] = discount
 
-    if shipping != "":
+    if shipping not in ("", None):
         ws["E45"] = shipping
+
 
 
     # ─────────────────────────────
@@ -238,3 +265,18 @@ def format_proforma_number(proforma_id: int | None) -> str:
 
 def safe_get(obj, attr, default=""):
     return getattr(obj, attr, default) or default
+
+def format_date(date_value):
+    if not date_value:
+        return ""
+
+    # si ya es datetime
+    if isinstance(date_value, datetime):
+        return date_value.strftime("%Y-%m-%d")
+
+    # si es string (SQLite)
+    try:
+        dt = datetime.fromisoformat(date_value)
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return date_value[:10]  # fallback seguro

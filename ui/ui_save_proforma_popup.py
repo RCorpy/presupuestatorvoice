@@ -8,7 +8,7 @@ from PySide6.QtCore import QDate
 from db.clients_repository import get_matches, create_or_update_client, client_exists
 from db.proformas_repository import create_proforma
 from excel.excel_exporter import export_proforma_to_excel
-
+from datetime import datetime
 
 class SaveProformaPopup(QDialog):
 
@@ -252,9 +252,9 @@ class SaveProformaPopup(QDialog):
                 "Datos incompletos",
                 "Nombre y teléfono son obligatorios."
             )
-            return
+            return False
 
-        # -------- CLIENTE --------
+        # -------- CLIENTE FISCAL --------
         client_data = {
             "name": name,
             "phone": phone,
@@ -268,7 +268,7 @@ class SaveProformaPopup(QDialog):
 
         client_id = create_or_update_client(client_data)
 
-        # -------- ENVÍO --------
+        # -------- ENVÍO (opcional) --------
         shipping_data = {
             "address": self.ship_address.text().strip(),
             "cp": self.ship_cp.text().strip(),
@@ -283,14 +283,13 @@ class SaveProformaPopup(QDialog):
             shipping_data = None
 
         # -------- PROFORMA --------
-        #print("1",self.proforma_model.rows)
         proforma_id = create_proforma(
             client_id=client_id,
             area_m2=self.ui_data["area_m2"],
             main_color=self.ui_data["color"],
             discount_percent=self.ui_data.get("discount_percent", 0),
             shipping_cost=self.ui_data.get("shipping_cost", 0),
-            table_rows=self.proforma_model.rows,  # 👈 AQUÍ ESTÁ LA VERDAD
+            table_rows=self.proforma_model.rows,
             shipping_data=shipping_data,
             notes=None
         )
@@ -301,7 +300,6 @@ class SaveProformaPopup(QDialog):
             f"Proforma guardada correctamente (ID {proforma_id})"
         )
 
-        self.accept()
         return True
 
     def on_save_and_export(self):
@@ -309,16 +307,43 @@ class SaveProformaPopup(QDialog):
         if not is_saved:
             return
 
-        # 🔹 Inyectar datos en el modelo (para el exporter)
-        self.proforma_model.client_name = self.ui_data.get("client_name", "")
-        self.proforma_model.phone = self.ui_data.get("phone", "")
+        # ==========================
+        # DATOS CLIENTE (flat, compatibles con exporter)
+        # ==========================
+        self.proforma_model.client_name = self.name_input.text().strip()
+        self.proforma_model.phone = self.phone_input.text().strip()
+        self.proforma_model.email = self.email_input.text().strip()
+        self.proforma_model.cif = self.cif_input.text().strip()
+        self.proforma_model.address = self.address_input.text().strip()
+        self.proforma_model.postal_code = self.cp_input.text().strip()
+        self.proforma_model.city = self.city_input.text().strip()
+        self.proforma_model.province = self.province_input.text().strip()
+
+        # ==========================
+        # DATOS PROFORMA
+        # ==========================
         self.proforma_model.area_m2 = self.ui_data.get("area_m2", "")
         self.proforma_model.main_color = self.ui_data.get("color", "")
-        self.proforma_model.discount_percent = self.ui_data.get("discount_percent", "")
-        self.proforma_model.shipping_cost = self.ui_data.get("shipping_cost", "")
-        self.proforma_model.created_at = self.ui_data.get("created_at", "")
-        self.proforma_model.proforma_id = None  # o el último si luego lo expones
+        self.proforma_model.discount_percent = self.ui_data.get("discount_percent", 0)
+        self.proforma_model.shipping_cost = self.ui_data.get("shipping_cost", 0)
 
+        self.proforma_model.shipping_contact = self.ship_contact.text().strip()
+        self.proforma_model.shipping_address = self.ship_address.text().strip()
+        self.proforma_model.shipping_postal_code = self.ship_cp.text().strip()
+        self.proforma_model.shipping_city = self.ship_city.text().strip()
+        self.proforma_model.shipping_province = self.ship_province.text().strip()
+        self.proforma_model.shipping_phone = self.ship_phone.text().strip()
+        self.proforma_model.shipping_notes = self.ship_notes.toPlainText().strip()
+
+        # ⚠️ MUY IMPORTANTE: formato fecha correcto
+        self.proforma_model.created_at = datetime.now().strftime("%Y-%m-%d")
+
+        # opcional: si más adelante expones el ID
+        self.proforma_model.proforma_id = ""
+
+        # ==========================
+        # EXPORT
+        # ==========================
         try:
             export_proforma_to_excel(self.proforma_model)
         except Exception as e:
@@ -329,6 +354,7 @@ class SaveProformaPopup(QDialog):
             )
 
         self.accept()
+
 
 
 
