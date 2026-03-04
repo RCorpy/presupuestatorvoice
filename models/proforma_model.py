@@ -3,7 +3,7 @@ from models.proforma_row import ProformaRow
 from db.materials_repository import load_materials
 from copy import deepcopy
 from models.row_factory import info_row
-from generator.resin_config import get_product_info, RESIN_SYSTEMS, PACKAGING_COST_PER_PHASE
+from generator.resin_config import get_product_info, RESIN_SYSTEMS, PACKAGING_COST_PER_PHASE, get_kit_base
 import re
 
 
@@ -60,14 +60,20 @@ class ProformaModel:
             row.col_3 = "not found"
             return
 
-        # Detectar tamaño del kit
+        # Detectar tamaño del kit (cualquier número entero en col_0)
         import re
         kit_multiplier = 1
         col0_lower = row.col_0.lower()
-        match = re.search(r"\b(6|12|18|24)\b", col0_lower)
+        match = re.search(r"\b(\d+)\b", col0_lower)
         if match:
-            kit_multiplier = int(match.group(1))
-        packaging_price = kit_multiplier * PACKAGING_COST_PER_PHASE/6 #lo hacemos para que sea por kg
+            try:
+                kit_multiplier = int(match.group(1))
+            except ValueError:
+                kit_multiplier = 1
+        # determinar la base de kits del producto para convertir el coste de envase a por kg
+        _, sys_key = self._infer_info_from_product(product_name)
+        kit_base = get_kit_base(sys_key) if sys_key else 6
+        packaging_price = kit_multiplier * PACKAGING_COST_PER_PHASE / kit_base
         # Precio final
         unit_price = round((base_price * kit_multiplier * multiplier) + packaging_price, 2) 
         row.col_3 = str(unit_price)
@@ -79,7 +85,7 @@ class ProformaModel:
             qty = 1
         row.col_4 = str(round(qty * unit_price, 2))
 
-        info, _ = self._infer_info_from_product(product_name)
+        info, sys_key = self._infer_info_from_product(product_name)
 
         if info:
             next_index = row_index + 1
@@ -157,14 +163,14 @@ class ProformaModel:
 
     def _infer_info_from_product(self, product_name: str):
         """
-        Devuelve la información asociada al sistema de resina.
-        Solo si el producto pertenece a RESIN_SYSTEMS.
+        Devuelve una tupla (info, system_key) correspondiente al sistema de resina
+        identificado por el nombre de producto. info puede ser None si no hay
+        texto adicional. system_key será None si no se encuentra el sistema.
         """
         for system_key, data in RESIN_SYSTEMS.items():
             if system_key in product_name.upper() or data["product_base"] in product_name.upper():
                 info = data.get("product_info")
-                if info:
-                    return info, ""
+                return info, system_key
         return None, None
 
     def get_total_price(self) -> float:

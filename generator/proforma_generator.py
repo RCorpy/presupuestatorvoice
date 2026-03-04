@@ -8,7 +8,7 @@ from generator.resin_config import (
     COLOR_IGNORED_PRODUCTS,
 )
 from generator.kit_selector import select_kits
-from generator.resin_config import get_packaging_cost_for_phase
+from generator.resin_config import get_packaging_cost_for_phase, get_kit_base
 
 
 
@@ -133,7 +133,8 @@ def generate_proforma(
                     )
                 )
             else:
-                kit_distribution = select_kits(total_kg)
+                kit_base = get_kit_base(system_key)
+                kit_distribution = select_kits(total_kg, base=kit_base)
                 is_first_kit = True
 
                 for kit_size, amount in kit_distribution.items():

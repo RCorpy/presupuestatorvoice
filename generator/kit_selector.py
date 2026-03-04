@@ -18,33 +18,40 @@ KIT_COMBINATIONS: Dict[int, Dict[int, int]] = {
     60: {24: 2, 12: 1},
 }
 
-AVAILABLE_KITS = [24, 18, 12, 6]
+# kits disponibles para cada múltiplo
+AVAILABLE_KITS_BASE6 = [24, 18, 12, 6]  # sistema estándar (múltiplo de 6)
+AVAILABLE_KITS_BASE5 = [25, 20, 15, 10, 5]  # kits típicos para productos de base 5
 
 
-def select_kits(total_kg: float) -> Dict[int, int]:
+def select_kits(total_kg: float, base: int = 6) -> Dict[int, int]:
     """
     Devuelve un dict {kit_size: amount} para cubrir total_kg.
-    Ajusta total_kg al múltiplo de 6 más cercano hacia arriba.
+    Ajusta total_kg al múltiplo de `base` más cercano hacia arriba.
+    La mayoría de productos usan base=6, pero algunos (p.ej. Acrilica/Politop)
+    trabajan en múltiplos de 5 y pasarán base=5.
     """
     if total_kg <= 0:
         return {}
 
-    # 🔹 Redondear al múltiplo de 6 superior
-    rounded_total = int(((total_kg + 5) // 6) * 6)
+    # 🔹 Redondear al múltiplo de "base" superior
+    rounded_total = int(((total_kg + base - 1) // base) * base)
 
-    # 🔹 Caso exacto predefinido
-    if rounded_total in KIT_COMBINATIONS:
+    # 🔹 Caso exacto predefinido (solo tenemos combos optimizados para base6)
+    if base == 6 and rounded_total in KIT_COMBINATIONS:
         return {
             size: qty
             for size, qty in KIT_COMBINATIONS[rounded_total].items()
             if qty > 0
         }
 
-    # 🔹 Caso estándar: > 60 kg
+    # 🔹 Caso estándar: >= max de combos o base != 6
     result: Dict[int, int] = {}
     remaining = rounded_total
 
-    for kit in AVAILABLE_KITS:
+    # elegir lista de kits en función del múltiplo
+    kit_list = AVAILABLE_KITS_BASE5 if base == 5 else AVAILABLE_KITS_BASE6
+
+    for kit in kit_list:
         num_kits = remaining // kit
         if num_kits > 0:
             result[kit] = num_kits
@@ -52,7 +59,7 @@ def select_kits(total_kg: float) -> Dict[int, int]:
 
     # 🔹 Si queda un resto, ponerlo en el kit más pequeño
     if remaining > 0:
-        smallest_kit = min(AVAILABLE_KITS)
+        smallest_kit = min(kit_list)
         result[smallest_kit] = result.get(smallest_kit, 0) + 1
 
     return result

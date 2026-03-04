@@ -68,6 +68,7 @@ RESIN_SYSTEMS = {
         },
         "cost_multiplier": 3.0,
         "product_info": "Resina monocomponente",
+        "kit_base": 5,
     },
 
     "LSB": {
@@ -92,6 +93,7 @@ RESIN_SYSTEMS = {
         },
         "cost_multiplier": 2.95,
         "product_info": "Secado rápido",
+        "kit_base": 5,
     },
 
     "EPOXI_MATE": {
@@ -239,11 +241,6 @@ COLOR_IGNORED_PRODUCTS = {
 }
 
 
-# =========================================================
-# Kits disponibles por tamaño (kg)
-# =========================================================
-
-KITS_AVAILABLE = [6, 12, 18, 24]
 
 # =========================================================
 # Herramientas estándar
@@ -267,8 +264,20 @@ DEFAULT_PRIMER_PRODUCT = "IMPRIMACION GENERICA"
 # Helpers (para usar desde el generador)
 # =========================================================
 
+# kit base multiplo (5 o 6) -- la mayoría de productos usan 6.
+# sólo algunas resinas históricas (Acrilica, Politop) trabajan en múltiplos de 5.
+# lo guardamos aquí para que los generadores y el modelo puedan consultarlo.
+
+DEFAULT_KIT_BASE = 6
+
 def get_product_base(system_key: str) -> str:
     return RESIN_SYSTEMS[system_key]["product_base"]
+
+def get_kit_base(system_key: str) -> int:
+    """Devuelve el múltiplo de kg que usa el sistema para empaquetado.
+    La mayoría trabajan en múltiplos de 6, algunos en 5.
+    """
+    return RESIN_SYSTEMS.get(system_key, {}).get("kit_base", DEFAULT_KIT_BASE)
 
 
 def get_primer_product(system_key: str) -> str:
